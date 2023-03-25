@@ -1,0 +1,50 @@
+cabal-version:      2.4
+name:               sekHNet
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+author:             Aleks Levin, Dmitry Sluch, Foma Shipilov
+maintainer:         TurtlePU lmao
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+executable hw-effects
+    main-is:          Main.hs
+--    other-modules:    Bank.Handle
+    build-depends:
+      base
+      , sekHNet
+      , containers
+      , transformers
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+library
+--    exposed-modules:  Bank, Bank.Error
+    build-depends:    base ^>=4.16
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+--test-suite sekHNet-test
+--    type:             exitcode-stdio-1.0
+--    main-is:          Spec.hs
+--    build-depends:
+--      base
+--      , hw-effects
+--      , pure-bank
+--      , QuickCheck
+--    hs-source-dirs:   test
+--    default-language: Haskell2010
