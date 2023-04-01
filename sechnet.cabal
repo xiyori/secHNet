@@ -21,7 +21,7 @@ maintainer:         TurtlePU lmao
 -- category:
 extra-source-files: CHANGELOG.md
 
-executable hw-effects
+executable sechnet
     main-is:          Main.hs
 --    other-modules:    Bank.Handle
     build-depends:
@@ -33,18 +33,12 @@ executable hw-effects
     default-language: Haskell2010
 
 library
---    exposed-modules:  Bank, Bank.Error
-    build-depends:    base ^>=4.16
+    exposed-modules: 
+      Graph.Graph
+      , Graph.GTensor
+    build-depends:
+      base ^>=4.16
+      , free
+      , tensors
     hs-source-dirs:   src
     default-language: Haskell2010
-
---test-suite sekHNet-test
---    type:             exitcode-stdio-1.0
---    main-is:          Spec.hs
---    build-depends:
---      base
---      , hw-effects
---      , pure-bank
---      , QuickCheck
---    hs-source-dirs:   test
---    default-language: Haskell2010
