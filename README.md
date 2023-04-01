@@ -1,12 +1,3 @@
-# Style Effect Knitting Haskell Network
+# Symbol Efficient Classification Haskell Network
 
-Do slyoz
-
-## TODO:
-1. Burn CDs
-2. NUTS
-3. ???
-
-5
-. GOTTEM LMFAO
-
+lul what

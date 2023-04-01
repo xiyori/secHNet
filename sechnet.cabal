@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               sekHNet
+name:               secHNet
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
@@ -26,7 +26,7 @@ executable hw-effects
 --    other-modules:    Bank.Handle
     build-depends:
       base
-      , sekHNet
+      , secHNet
       , containers
       , transformers
     hs-source-dirs:   app
