@@ -1,10 +1,12 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module Layers.Layer where
 
 import Data.Matrix
 
-class NNLayer t where
+class Layer t a where
     -- input tensor -> output tensor
-    forward :: Matrix t -> Matrix t
+    forward :: a -> Matrix t -> Matrix t
     -- input tensor -> output returned by Layer on forward call -> gradient over outputs -> gradient over inputs
-    backward :: Matrix t -> Matrix t -> Matrix t -> Matrix t
+    backward :: a -> Matrix t -> Matrix t -> Matrix t -> Matrix t
 
