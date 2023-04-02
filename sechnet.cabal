@@ -37,6 +37,7 @@ library
       Gradient.Gradient
       , Layers.Layer
       , Optimizer.Optimizer
+      , Optimizer.SGD
     build-depends:
       base ^>=4.16
       , free
