@@ -15,7 +15,9 @@ class Layer t a where
 
 class HasParams t a where
     getParams :: a -> [Matrix t]
-    setParams :: [Matrix t] -> a
+    setParams :: a -> [Matrix t] -> a
+    getGrads :: a -> [Matrix t]
+    setGrads :: a -> [Matrix t] -> a
 
 data Linear t = Linear {
   linearWeight :: Matrix t,
