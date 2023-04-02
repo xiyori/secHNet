@@ -34,9 +34,7 @@ executable sechnet
 
 library
     exposed-modules: 
-      Graph.Graph
-      , Graph.GMatrix
-      , Layers.Interpreter
+      Gradient.Gradient
       , Layers.Layer
     build-depends:
       base ^>=4.16

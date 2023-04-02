@@ -3,7 +3,7 @@ module Gradient.Gradient where
 import Data.Matrix
 import Layers.Layer
 
-data LayerT t = forall l. (Layer t l) => LayerT l
+data LayerT t = forall l. (Layer t l, HasParams t l) => LayerT l
 
 newtype Network t = Network{ getNetwork :: [LayerT t] }
 
