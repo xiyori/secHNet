@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 module Graph.Graph where
 
 import Control.Monad.Free (Free)
@@ -16,11 +18,13 @@ data Operation t a =
    -- | ReLU activation.
     | ReLU a
    -- | Cross-entropy loss with a target tensor.
-    | CrossEntropyLogits a (GMatrix t)
-
+    | CrossEntropyLogits a (GMatrix t) deriving (Functor)
 -- | Computational graph with operations from grammar @f@.
 --   Intermediate results are cached for use in backward.
 type Graph f t = Free f (Maybe (Matrix t))
 
--- Computes the forward pass
+
+data OperationWithForward t a = OperationWithForward (Operation t a) (Matrix t) deriving (Functor)
+data OperationWithBackward t a = OperationWithBackward (OperationWithForward t a) (Matrix t) deriving (Functor)
+
 
