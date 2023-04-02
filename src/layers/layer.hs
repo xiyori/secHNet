@@ -1,12 +1,10 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-
 module NN.Layer where
 
-import Data.Tensor
+import Data.Matrix
 
-class NNLayer n i o where
+class NNLayer t where
     -- input tensor -> output tensor
-    forward :: Tensor i n -> Tensor o n
+    forward :: Matrix t -> Matrix t
     -- input tensor -> output returned by Layer on forward call -> gradient over outputs -> gradient over inputs
-    backward :: Tensor i n -> Tensor o n -> Tensor o n -> Tensor i n
+    backward :: Matrix t -> Matrix t -> Matrix t -> Matrix t
 
