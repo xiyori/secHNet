@@ -8,4 +8,4 @@ import Optimizer.Optimizer
 data SGD = SGD {learningRate :: Float}
 
 instance Optimizer SGD where
-    stepParam (SGD eta) param grad = param - grad * eta
+    stepParam (SGD eta) param grad = param - scaleMatrix eta grad
