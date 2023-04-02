@@ -36,8 +36,8 @@ library
     exposed-modules: 
       Graph.Graph
       , Graph.GMatrix
-      , NN.Interpreter
-      , NN.Layer
+      , Layers.Interpreter
+      , Layers.Layer
     build-depends:
       base ^>=4.16
       , free
