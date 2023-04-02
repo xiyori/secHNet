@@ -13,6 +13,10 @@ class Layer t a where
     --   updated layer -> gradient over inputs
     backward :: a -> Matrix t -> (a, Matrix t)
 
+class HasParams t a where
+    getParams :: a -> [Matrix t]
+    setParams :: [Matrix t] -> a
+
 data Linear t = Linear {
   linearWeight :: Matrix t,
   linearGradWeight :: Matrix t,
