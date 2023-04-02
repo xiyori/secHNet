@@ -1,4 +1,4 @@
-module NN.Layer where
+module Layers.Layer where
 
 import Data.Matrix
 

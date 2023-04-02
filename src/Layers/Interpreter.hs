@@ -1,4 +1,4 @@
-module NN.Interpreter where
+module Layers.Interpreter where
 
 import Data.Matrix
 import Graph.Graph
