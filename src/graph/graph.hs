@@ -21,10 +21,9 @@ data Operation t a =
     | CrossEntropyLogits a (GMatrix t) deriving (Functor)
 -- | Computational graph with operations from grammar @f@.
 --   Intermediate results are cached for use in backward.
-type Graph f t = Free f (Maybe (Matrix t))
+type Graph f t = Free f (Matrix t)
 
+data OperationWithCache t a = OperationWithForward (Operation t a) (Matrix t) (Matrix t )deriving (Functor)
 
-data OperationWithForward t a = OperationWithForward (Operation t a) (Matrix t) deriving (Functor)
-data OperationWithBackward t a = OperationWithBackward (OperationWithForward t a) (Matrix t) deriving (Functor)
 
 
