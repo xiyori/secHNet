@@ -42,54 +42,54 @@ forwardHelper (NeuralNetwork nodes inputs outputs output) inpValue cache = do
             forward submodule inpVals
         
 
-backward :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Matrix t -> m (H.Map String (Matrix t))
-backward nn@(NeuralNetwork nodes inputs outputs output) outValue = do
-    cache <- liftIO $ newArray (0, length nodes - 1) Nothing
-    transposed <- liftIO $ newArray (0, length nodes - 1) []
-    backwardHelper nn outValue cache transposed
+-- backward :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Matrix t -> m (H.Map String (Matrix t))
+-- backward nn@(NeuralNetwork nodes inputs outputs output) outValue = do
+--     cache <- liftIO $ newArray (0, length nodes - 1) Nothing
+--     transposed <- liftIO $ newArray (0, length nodes - 1) []
+--     backwardHelper nn outValue cache transposed
 
 
-backwardHelper :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Matrix t -> 
-    IOArray Int (Maybe (Matrix t)) -> IOArray Int [Int] -> m (H.Map String (Matrix t))
+-- backwardHelper :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Matrix t -> 
+--     IOArray Int (Maybe (Matrix t)) -> IOArray Int [Int] -> m (H.Map String (Matrix t))
 
-backwardHelper (NeuralNetwork nodes inputs outputs output) outValue cache transposed = 
-    makeTransposed output
-    error "TODO"
-    where
-        makeTransposed :: (Monad m, MonadIO m) => Int -> m()
-        makeTransposed i = 
-            case nodes !! i of
-                (Input _) -> pure ()
-                (x :+: y) -> do
-                    xx <- liftIO $ readArray transposed x
-                    liftIO $ writeArray transposed x (i : xx)
-                    yy <- liftIO $ readArray transposed y
-                    liftIO $ writeArray transposed y (i : yy)
-                (LayerNode _ x) -> do
-                    xx <- liftIO $ readArray transposed x
-                    liftIO $ writeArray transposed x (i : xx)
-                (SubmoduleNode _ map) -> forM_ map (\x -> do
-                    xx <- liftIO $ readArray transposed x
-                    liftIO $ writeArray transposed x (i : xx) 
-                    )
+-- backwardHelper (NeuralNetwork nodes inputs outputs output) outValue cache transposed = 
+--     makeTransposed output
+--     error "TODO"
+--     where
+--         makeTransposed :: (Monad m, MonadIO m) => Int -> m()
+--         makeTransposed i = 
+--             case nodes !! i of
+--                 (Input _) -> pure ()
+--                 (x :+: y) -> do
+--                     xx <- liftIO $ readArray transposed x
+--                     liftIO $ writeArray transposed x (i : xx)
+--                     yy <- liftIO $ readArray transposed y
+--                     liftIO $ writeArray transposed y (i : yy)
+--                 (LayerNode _ x) -> do
+--                     xx <- liftIO $ readArray transposed x
+--                     liftIO $ writeArray transposed x (i : xx)
+--                 (SubmoduleNode _ map) -> forM_ map (\x -> do
+--                     xx <- liftIO $ readArray transposed x
+--                     liftIO $ writeArray transposed x (i : xx) 
+--                     )
     
-        cached i = do
-            val <- liftIO $ readArray cache i -- We haven't calculated grad yet
-            case val of
-                Nothing -> do
-                    out <- readArray transposed i
-                    forM_ out cached -- We traverse all our outputs
-                    calc (nodes !! i)
-                Just res -> pure ()
+--         cached i = do
+--             val <- liftIO $ readArray cache i -- We haven't calculated grad yet
+--             case val of
+--                 Nothing -> do
+--                     out <- readArray transposed i
+--                     forM_ out cached -- We traverse all our outputs
+--                     calc (nodes !! i)
+--                 Just res -> pure ()
 
-        calc (Input s) = pure $ inpValue H.! s
-        calc (x :+: y) = do
-            xx <- cached x
-            yy <- cached y
-            pure $ elementwise (+) xx yy
-        calc (LayerNode handle inp) = do
-            inpVal <- cached inp
-            liftIO $ L.forward handle inpVal
-        calc (SubmoduleNode submodule inps) = do
-            inpVals <- traverse cached inps
-            forward submodule inpVals
+--         calc (Input s) = pure $ inpValue H.! s
+--         calc (x :+: y) = do
+--             xx <- cached x
+--             yy <- cached y
+--             pure $ elementwise (+) xx yy
+--         calc (LayerNode handle inp) = do
+--             inpVal <- cached inp
+--             liftIO $ L.forward handle inpVal
+--         calc (SubmoduleNode submodule inps) = do
+--             inpVals <- traverse cached inps
+--             forward submodule inpVals
