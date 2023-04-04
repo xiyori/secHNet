@@ -54,12 +54,10 @@ newLayer l inp = do
     handle <- liftIO $ newLayerHandle l
     newNode $ LayerNode handle inp
 
--- newSubmodule :: (MonadIO m, MonadNNDesigner m t) => NeuralNetwork t -> Map String Int -> m Int
--- newSubmodule (NeuralNetwork nodes inputs outputs output) map = do
---     newNodes <- forM nodes helper
---     newNode $ SubmoduleNode (NeuralNetwork newNodes inputs outputs output) map
---     where 
---         helper (LayerNode)
+newSubmodule :: (MonadIO m, MonadNNDesigner m t) => NeuralNetwork t -> Map String Int -> m Int
+newSubmodule nn map = do
+    newNN <- copyNN nn
+    newNode $ SubmoduleNode newNN map
 
 compileNN :: (Monad m, MonadIO m) => StateT (NeuralNetwork t) m (String, Int) -> m (NeuralNetwork t)
 compileNN st = do
