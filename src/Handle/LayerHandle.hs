@@ -12,10 +12,12 @@ import Data.Matrix
 import Data.Functor ((<&>))
 import Data.IORef(IORef, newIORef, readIORef, writeIORef)
 
-data LayerType t = forall f l. (Functor f, P.Layer l f t) => LayerType l
+data LayerType t = forall f l. (Applicative f, P.Layer l f t) => LayerType l
 newtype LayerHandle t = LayerHandle {getLayerType :: IORef (LayerType t) }
 
-consumeModify :: (forall f l. (Functor f, P.Layer l f t) => l -> (l, b)) -> LayerType t -> (LayerType t, b)
+
+
+consumeModify :: (forall f l. (Applicative f, P.Layer l f t) => l -> (l, b)) -> LayerType t -> (LayerType t, b)
 consumeModify f (LayerType l) = 
     let (nl, b) = f l in (LayerType nl, b)
 
@@ -56,6 +58,7 @@ modifyParams hand modifier = do
     lt <- readIORef ref
     let (newLayer, _) = consumeModify (\l -> (P.setParams l (modifier (P.getParams l)) ,())) lt
     writeIORef ref newLayer
+
 
 
 

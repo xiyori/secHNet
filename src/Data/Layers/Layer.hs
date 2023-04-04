@@ -72,6 +72,8 @@ instance (Ord t, Num t) => Layer (ReLU t) [] t where
           | mask > 0  = x
           | otherwise = 0
 
+  getParams _ = []
+  getGrads _ = []
   setParams = const
   setGrads = const
 
