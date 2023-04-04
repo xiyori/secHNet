@@ -1,24 +1,23 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
-module Layers.Layer where
+module Data.Layers.Layer where
 
 import Data.Matrix (Matrix, elementwise, transpose,
                     fromLists, matrix, nrows, ncols, (!))
 
-class Layer t a where
+class Layer a f t | a -> f, a -> t where
   -- | layer -> input tensor -> (updated layer, output tensor)
   forward :: a -> Matrix t -> (a, Matrix t)
-  -- | operation -> gradient over outputs ->
-  --   (updated layer, gradient over inputs)
+  -- | layer -> output gradient -> (updated layer, input gradient)
   backward :: a -> Matrix t -> (a, Matrix t)
-
-class HasParams t a where
-    getParams :: a -> [Matrix t]
-    setParams :: a -> [Matrix t] -> a
-    getGrads :: a -> [Matrix t]
-    setGrads :: a -> [Matrix t] -> a
+  getParams :: a -> f (Matrix t)
+  setParams :: a -> f (Matrix t) -> a
+  getGrads :: a -> f (Matrix t)
+  setGrads :: a -> f (Matrix t) -> a
+    
 
 data Linear t = Linear {
   -- | [n, m]
@@ -33,7 +32,7 @@ data Linear t = Linear {
   linearInput :: Matrix t
 }
 
-instance Num t => Layer t (Linear t) where
+instance Num t => Layer (Linear t) [] t where
   forward :: Linear t -> Matrix t -> (Linear t, Matrix t)
   forward (Linear weight gradWeight bias gradBias _) input =
     (Linear weight gradWeight bias gradBias input, weight * input + bias)
@@ -47,11 +46,17 @@ instance Num t => Layer t (Linear t) where
         newGradWeight = grad_output * transpose input
         newGradBias = grad_output
 
+  getParams :: Num t => Linear t -> [Matrix t]
+  getParams x = [linearWeight x, linearBias x]
+  getGrads x = [linearGradWeight x, linearGradBias x]
+  setParams (Linear _ gradWeight _ gradBias input) l = Linear (head l) gradWeight (l !! 1) gradBias input
+  setGrads (Linear weight _ bias _ input) l = Linear weight (head l) bias (l !! 1) input
+
 newtype ReLU t = ReLU {
   reluInput :: Matrix t
 }
 
-instance (Ord t, Num t) => Layer t (ReLU t) where
+instance (Ord t, Num t) => Layer (ReLU t) [] t where
   forward :: ReLU t -> Matrix t -> (ReLU t, Matrix t)
   forward _ input = (ReLU input, fmap relu input)
     where
@@ -67,6 +72,9 @@ instance (Ord t, Num t) => Layer t (ReLU t) where
           | mask > 0  = x
           | otherwise = 0
 
+  setParams = const
+  setGrads = const
+
 data CrossEntropyLogits t = CrossEntropyLogits {
   -- | Class index from 1 to @n_classes@
   сrossEntropyTarget :: Int,
@@ -74,7 +82,7 @@ data CrossEntropyLogits t = CrossEntropyLogits {
   сrossEntropyInput :: Matrix t
 }
 
-instance Floating t => Layer t (CrossEntropyLogits t) where
+instance Floating t => Layer (CrossEntropyLogits t) [] t where
   forward :: CrossEntropyLogits t -> Matrix t -> (CrossEntropyLogits t, Matrix t)
   forward (CrossEntropyLogits target _) logits =
     (CrossEntropyLogits target logits,
@@ -90,6 +98,12 @@ instance Floating t => Layer t (CrossEntropyLogits t) where
           | otherwise   = 0
         softmax = fmap (divideBySum . exp) logits
         divideBySum = (/ (sum . fmap exp) logits)
+  
+  getParams x = []
+  getGrads x = []
+  setParams = const
+  setGrads = const
+  
 
 setCrossEntropyTarget :: CrossEntropyLogits t -> Int -> CrossEntropyLogits t
 setCrossEntropyTarget (CrossEntropyLogits target input) newTarget =

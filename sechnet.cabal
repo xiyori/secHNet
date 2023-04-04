@@ -34,10 +34,7 @@ executable sechnet
 
 library
     exposed-modules: 
-      Gradient.Gradient
-      , Layers.Layer
-      , Optimizer.Optimizer
-      , Optimizer.SGD
+        Data.Layers.Layer
     build-depends:
       base ^>=4.16
       , free
