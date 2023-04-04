@@ -38,7 +38,8 @@ library
         Handle.LayerHandle,
         Data.Dataset.Dataset,
         NN.NNDesigner,
-        NN.Autograd
+        NN.Autograd,
+        NN.Optimizer
     build-depends:
       base ^>=4.16
       , free

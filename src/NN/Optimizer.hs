@@ -1,29 +1,24 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ConstrainedClassMethods #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module NN.Optimizer where
 
+import Control.Applicative (liftA3)
+import Data.Traversable (sequenceA)
 import Data.Matrix
 import Data.Maybe (fromJust)
 
-class Applicative f => Optimizer o f t a where
+class (Applicative f, Traversable f) => Optimizer o f t a where
     step :: o -> f (Matrix t) -> f (Matrix t) -> f a -> (o, f (Matrix t), f a)
 
-instance Optimizer Momentum 
+data Momentum = Momentum {beta :: Double, learningRate :: Double}
 
-                    dW = "dW" ++ show (l + 1)
-                    db = "db" ++ show (l + 1)
-                    v_dW = fromJust $ lookup dW v
-                    v_db = fromJust $ lookup db v
-                    dW_grads = fromJust $ lookup (dW ++ "_grads") grads
-                    db_grads = fromJust $ lookup (db ++ "_grads") grads
-                    new_v_dW = scaleMatrix beta v_dW + scaleMatrix (1 - beta) dW_grads
-                    new_v_db = scaleMatrix beta v_db + scaleMatrix (1 - beta) db_grads
-
-                    w = "W" ++ show (l + 1)
-                    b = "b" ++ show (l + 1)
-                    w_params = fromJust $ lookup w params
-                    b_params = fromJust $ lookup b params
-                    new_W_params = w_params - scaleMatrix learningRate new_v_dW
-                    new_b_params = b_params - scaleMatrix learningRate new_v_db
-
+instance (Applicative f, Traversable f) => Optimizer Momentum f Double (Matrix Double) where
+    step optim params grads v = 
+        let tup_func = liftA3 helper params grads v in (optim, fmap fst tup_func, fmap snd tup_func)
+            where
+                helper param grad v' = 
+                    let new_vels = scaleMatrix (beta optim) v' + scaleMatrix (1 - (beta optim)) grad
+                        new_params = param - scaleMatrix (learningRate optim) new_vels
+                    in (new_params, new_vels)
