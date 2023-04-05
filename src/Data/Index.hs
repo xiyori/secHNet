@@ -4,7 +4,7 @@ import Data.List (foldl')
 
 type Index = [Int]
 type MIndex = (Int, Int)
-type MultiIndex = [[Int]]
+type Slices = [[Int]]
 
 -- | Separate last 2 elements of a tensor index.
 splitIndex :: Index -> (Index, MIndex)
@@ -47,7 +47,7 @@ toInt shape index =
 fromInt :: Index -> Int -> Index
 fromInt shape index =
   snd . foldl' (
-    \ (i, accum) coeff -> (mod i coeff, div i coeff : accum)
+    \ (i, accum) coeff -> (i `mod` coeff, div i coeff : accum)
   ) (index, [])
   $ _dimCoeffs shape
 
@@ -103,3 +103,6 @@ swapElementsAt i j index =
     left = take i index
     middle = take (j - i - 1) (drop (i + 1) index)
     right = drop (j + 1) index
+
+allEqual :: Eq a => [a] -> Bool
+allEqual xs = all (== head xs) $ tail xs

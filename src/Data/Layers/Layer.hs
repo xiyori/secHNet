@@ -159,13 +159,13 @@ instance (Ord t, Num t) => Layer (ReLU t) t where
 -- | Class index from 1 to @n_classes@
 data CrossEntropyLogits t = CrossEntropyLogits {
   -- | [batch]
-  сrossEntropyTarget :: [Int],
+  сrossEntropyTarget :: Tensor Int,
   -- | [batch, n_classes]
   сrossEntropyInput :: Tensor t
 }
 
 makeCrossEntropyLogits :: CrossEntropyLogits Double
-makeCrossEntropyLogits = CrossEntropyLogits [] 0
+makeCrossEntropyLogits = CrossEntropyLogits 0 0
 
 instance Floating t => Layer (CrossEntropyLogits t) t where
   forward :: Floating t =>
@@ -175,7 +175,7 @@ instance Floating t => Layer (CrossEntropyLogits t) t where
     -logitsForAnswers + log (sumAlongDim (exp logits) (-1)))
     where
       batch = head $ shape logits
-      logitsForAnswers = getElems logits [[1 .. batch], target]
+      logitsForAnswers = logits !. [arange 1 batch, target]
 
   backward :: Floating t =>
     CrossEntropyLogits t -> Tensor t -> (CrossEntropyLogits t, Tensor t)
@@ -184,9 +184,9 @@ instance Floating t => Layer (CrossEntropyLogits t) t where
       where
         targetMask = tensor (shape logits) setClasses
         setClasses [i, j]
-          | target !! i == j = 1
-          | otherwise        = 0
-        softmax = expLogits / insertDim (sumAlongDim expLogits (-1)) (-1)
+          | target !? [i] == j = 1
+          | otherwise          = 0
+        softmax = expLogits / sumAlongDimKeepDims expLogits (-1)
         expLogits = exp logits
 
   getParams x = Flat []
@@ -195,6 +195,6 @@ instance Floating t => Layer (CrossEntropyLogits t) t where
   setGrads = const
 
 
-setCrossEntropyTarget :: CrossEntropyLogits t -> [Int] -> CrossEntropyLogits t
+setCrossEntropyTarget :: CrossEntropyLogits t -> Tensor Int -> CrossEntropyLogits t
 setCrossEntropyTarget (CrossEntropyLogits target input) newTarget =
   CrossEntropyLogits newTarget input
