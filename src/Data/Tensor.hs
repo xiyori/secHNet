@@ -25,9 +25,12 @@ instance (A.Ix i, Num i) => Applicative (Array i) where
 
   liftA2 :: A.Ix i =>
     (a -> b -> c) -> Array i a -> Array i b -> Array i c
-  liftA2 f x1 x2 =
-    listArray (bounds x1)
-    $ zipWith f (elems x1) (elems x2)
+  liftA2 f x1 x2
+    | bounds x1 == bounds x2 =
+      listArray (bounds x1)
+      $ zipWith f (elems x1) (elems x2)
+    | otherwise              =
+      error "array size mismatch"
 
 instance Applicative Tensor where
   pure :: a -> Tensor a
@@ -73,7 +76,7 @@ tensor shape builder =
   Tensor shape
   $ array (1, toInt arrayShape arrayShape)
   $ map (
-    \index -> (
+    \ index -> (
       toInt arrayShape index,
       matrix matrixRows matrixCols $ builder . mergeIndex index
     ))
@@ -93,7 +96,7 @@ ones shape = full shape 1
 eye :: Num t => Index -> Tensor t
 eye shape =
   tensor shape (
-    \index ->
+    \ index ->
       if all (== head index) $ tail index then
         1
       else 0
@@ -101,23 +104,24 @@ eye shape =
 
 getElem :: Tensor t -> Index -> t
 getElem (Tensor shape dat) index
-  | validateIndex shape index =
+  | validateIndex shape normalizedIndex =
     (dat A.! arrayIndex) M.! matrixIndex
   | otherwise =
     error "incorrect index"
   where
-    (arrayIndex, matrixIndex) = toInternal shape index
+    normalizedIndex = normalizeIndex shape index
+    (arrayIndex, matrixIndex) = toInternal shape normalizedIndex
 
 (!?) :: Tensor t -> Index -> t
 (!?) = getElem
 
 getElems :: Tensor t -> MultiIndex -> Tensor t
 getElems x@(Tensor shape _) multiIndex =
-  tensor newShape (\index -> x !? zipWith (!!) expandedIndex index)
+  tensor newShape (\ index -> x !? zipWith (!!) expandedIndex index)
   where
     expandedIndex =
       zipWith (
-        \dim slice ->
+        \ dim slice ->
           if null slice then
             [1 .. dim]
           else slice
@@ -145,13 +149,7 @@ swapdim x@(Tensor shape _) from to =
 dot :: Num t => Tensor t -> Tensor t -> Tensor t
 dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
   Tensor (mergeIndex arrayShape (matrixRows1, matrixCols2))
-  $ array (1, toInt arrayShape arrayShape)
-  $ map ((
-    \index -> (
-      index,
-      (dat1 A.! index) * (dat2 A.! index)
-    )) . toInt arrayShape)
-  $ indexRange0 arrayShape
+  $ liftA2 (*) dat1 dat2
   where
     (arrayShape, (matrixRows1, _)) = splitIndex shape1
     (_, (_, matrixCols2)) = splitIndex shape2

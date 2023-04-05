@@ -20,6 +20,16 @@ splitIndex = go []
 mergeIndex :: Index -> MIndex -> Index
 mergeIndex arrayIndex (i, j) = arrayIndex ++ [i, j]
 
+-- | Parse negative values.
+normalizeIndex :: Index -> Index -> Index
+normalizeIndex =
+  zipWith (
+    \ dim i ->
+      if i < 0 then
+        dim + 1 - i
+      else i
+  )
+
 -- | Convert tensor index to internal representation.
 toInternal :: Index -> Index -> (Int, MIndex)
 toInternal shape index =
@@ -30,20 +40,20 @@ toInternal shape index =
 -- | Convert tensor index to flat integer index.
 toInt :: Index -> Index -> Int
 toInt shape index =
-  foldl' (\accum (coeff, i) -> accum + coeff * (i - 1)) 1
+  foldl' (\ accum (coeff, i) -> accum + coeff * (i - 1)) 1
   $ zip (_dimCoeffs shape) index
 
 -- | Convert flat integer index to tensor index.
 fromInt :: Index -> Int -> Index
 fromInt shape index =
   snd . foldl' (
-    \(i, accum) coeff -> (mod i coeff, div i coeff : accum)
+    \ (i, accum) coeff -> (mod i coeff, div i coeff : accum)
   ) (index, [])
   $ _dimCoeffs shape
 
 _dimCoeffs :: [Int] -> [Int]
 _dimCoeffs =
-  foldr (\dim coeffs@(coeff : _) -> dim * coeff : coeffs) [1] . tail
+  foldr (\ dim coeffs@(coeff : _) -> dim * coeff : coeffs) [1] . tail
 
 -- | Generate all indices between low and high (inclusive).
 indexRange :: Index -> Index -> [Index]
@@ -58,7 +68,7 @@ indexRange low high = reverse $ go [low]
           reverse
           $ snd
           $ foldr (
-            \(l, h, i) (needAdd, index) ->
+            \ (l, h, i) (needAdd, index) ->
               if needAdd && i == h - 1 then
                 (True, l : index)
               else if needAdd then
@@ -75,14 +85,13 @@ indexRange0 high = indexRange (map (const 1) high) high
 countIndex :: Index -> Int
 countIndex = foldl' (*) 1
 
--- | Total number of elements with indices between 1 and high.
+-- | Validate index correctness.
 validateIndex :: Index -> Index -> Bool
 validateIndex shape index
-  | length shape /= length index                  = False
-  | or $ zipWith (>) index shape                  = False
-  | or $ zipWith (\i dim -> i < -dim) index shape = False
-  | 0 `elem` index                                = False
-  | otherwise                                     = True
+  | length shape /= length index = False
+  | or $ zipWith (>) index shape = False
+  | any (< 1) index              = False
+  | otherwise                    = True
 
 -- | Swap index dimensions.
 swapElementsAt :: Int -> Int -> Index -> Index
