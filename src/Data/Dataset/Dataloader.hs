@@ -6,6 +6,7 @@ import System.Random
 import Data.List (nub)
 import Conduit (MonadIO(liftIO), yieldMany, awaitNonNull)
 import Control.Monad.Trans.Class (lift)
+import Data.Void(Void)
 
 randomSample :: (Dataset s m t, MonadIO m) => s -> ConduitT () t m ()
 randomSample ds = do

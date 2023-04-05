@@ -5,13 +5,16 @@
 module Handle.TrainerHandle where
 
 import Data.Matrix
-import NN.Optimizer ( Optimizer(step) )
-import Handle.OptimizerHandle ( HasMomentum(..), MomentumHandle(getParams, getMomentum) )
+import NN.Optimizer ( Optimizer(step), Momentum)
+import Handle.OptimizerHandle ( HasMomentum(..), MomentumHandle(MomentumHandle, getParams, getMomentum) )
 import qualified NN.NNDesigner as NN
 import Data.IORef(IORef, newIORef, readIORef, writeIORef)
 import Data.Layers.Layer (Params(Flat, Nested))
 import Control.Monad.IO.Class(MonadIO, liftIO)
 import Control.Monad.Reader.Class(MonadReader, asks)
+import NN.Autograd as AG
+import Data.HashMap (Map)
+import qualified Data.Layers.Layer as L
 
 data TrainerHandle = TrainerHandle {
     getModel :: NN.NeuralNetwork Double,
@@ -27,6 +30,9 @@ instance HasTrainer TrainerHandle where
 instance HasMomentum TrainerHandle Params where
     momentum = getMomentumHandle . trainer
 
+zeroLike :: Params (Matrix Double) -> Params (Matrix Double)
+zeroLike (Flat f) = Flat $ map (\m -> zero (nrows m) (ncols m)) f
+zeroLike (Nested f) = Nested $ map zeroLike f
 
 zeroGrad  :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => m ()
 zeroGrad = do
@@ -34,11 +40,7 @@ zeroGrad = do
     modelGrads <- NN.getGrads model
     let newModelGrads = zeroLike modelGrads
     NN.setGrads model newModelGrads
-        where 
-            zeroLike :: Params (Matrix Double) -> Params (Matrix Double)
-            zeroLike (Flat f) = Flat $ map (\m -> zero (nrows m) (ncols m)) f
-            zeroLike (Nested f) = Nested $ map zeroLike f
-
+            
 
 optimize :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => m ()
 optimize = do
@@ -52,4 +54,23 @@ optimize = do
     NN.setParams model newModelParams
     liftIO $ writeIORef (getMomentum optHandle) newOpt
     liftIO $ writeIORef (getParams optHandle) newOptParams
+
+forward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Map String (Matrix Double) -> m (Matrix Double)
+forward inp = do
+    model <- asks (getModel . trainer)
+    AG.forward model inp
+
+backward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Matrix Double -> m (Map String (Maybe(Matrix Double)))
+backward inp = do
+    model <- asks (getModel . trainer)
+    AG.backward model inp
+
+
+newTrainerHandle :: (Monad m, MonadIO m) => NN.NeuralNetwork Double -> Momentum -> m TrainerHandle
+newTrainerHandle nn m = do
+    mh <- liftIO $ newIORef m
+    params <- NN.getParams nn
+    let zParams = zeroLike params
+    parh <- liftIO $ newIORef zParams
+    pure $ TrainerHandle nn (MomentumHandle mh parh)
     

@@ -7,8 +7,9 @@ module Handle.OptimizerHandle where
 
 import Data.Matrix (Matrix)
 import Data.Layers.Layer (Params)
-import NN.Optimizer(Optimizer, Momentum)
-import Data.IORef(IORef)
+import NN.Optimizer(Optimizer, Momentum (Momentum))
+import Data.IORef(IORef, newIORef)
+import Control.Monad.IO.Class(MonadIO, liftIO)
 
 
 data MomentumHandle f = MomentumHandle { 
@@ -21,7 +22,6 @@ class HasMomentum m f | m -> f where
 
 instance HasMomentum (MomentumHandle f) f where
     momentum = id
-
 
 
 

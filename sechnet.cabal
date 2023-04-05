@@ -31,6 +31,8 @@ executable sechnet
       , transformers
       , hashmap
       , matrix
+      , conduit
+      , mtl
     hs-source-dirs:   app
     default-language: Haskell2010
 
@@ -39,6 +41,7 @@ library
         Data.Layers.Layer,
         Handle.LayerHandle,
         Data.Dataset.Dataset,
+        Data.Dataset.Dataloader,
         NN.NNDesigner,
         NN.Autograd,
         NN.Optimizer,
