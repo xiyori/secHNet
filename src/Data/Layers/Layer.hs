@@ -66,6 +66,9 @@ instance Num t => Layer (Linear t) t where
   setParams (Linear _ gradWeight _ gradBias input) (Flat l) = Linear (head l) gradWeight (l !! 1) gradBias input
   setGrads (Linear weight _ bias _ input) (Flat l) = Linear weight (head l) bias (l !! 1) input
 
+instance Show (Linear t) where
+  show (Linear weight _ _ _ _) = "Linear (" ++ show (ncols weight) ++ "," ++ show (nrows weight) ++")"
+
 newtype ReLU t = ReLU {
   reluInput :: Matrix t
 }
@@ -93,6 +96,10 @@ instance (Ord t, Num t) => Layer (ReLU t) t where
   getGrads _ = Flat []
   setParams = const
   setGrads = const
+
+instance Show (ReLU t) where
+  show (ReLU inp) = "ReLU (" ++ show (nrows inp) ++ ")"
+
 
 data CrossEntropyLogits t = CrossEntropyLogits {
   -- | Class index from 1 to @n_classes@
@@ -130,3 +137,6 @@ instance Floating t => Layer (CrossEntropyLogits t) t where
 setCrossEntropyTarget :: CrossEntropyLogits t -> Int -> CrossEntropyLogits t
 setCrossEntropyTarget (CrossEntropyLogits target input) newTarget =
   CrossEntropyLogits newTarget input
+
+instance Show (CrossEntropyLogits t) where
+  show (CrossEntropyLogits _ inp) = "CrossEntropyLogits (" ++ show (nrows inp) ++ ")"

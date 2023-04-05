@@ -9,12 +9,12 @@ import Data.Traversable (sequenceA)
 import Data.Matrix
 import Data.Maybe (fromJust)
 
-class (Applicative f, Traversable f) => Optimizer o f t a where
+class (Applicative f) => Optimizer o f t a where
     step :: o -> f (Matrix t) -> f (Matrix t) -> f a -> (o, f (Matrix t), f a)
 
 data Momentum = Momentum {beta :: Double, learningRate :: Double}
 
-instance (Applicative f, Traversable f) => Optimizer Momentum f Double (Matrix Double) where
+instance (Applicative f) => Optimizer Momentum f Double (Matrix Double) where
     step optim params grads v = 
         let tup_func = liftA3 helper params grads v in (optim, fmap fst tup_func, fmap snd tup_func)
             where

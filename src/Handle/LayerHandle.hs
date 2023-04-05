@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Handle.LayerHandle where
 
@@ -12,10 +13,12 @@ import Data.Matrix
 import Data.Functor ((<&>))
 import Data.IORef(IORef, newIORef, readIORef, writeIORef)
 
-data LayerType t = forall l. (P.Layer l t) => LayerType l
+data LayerType t = forall l. (P.Layer l t, Show l) => LayerType l
 newtype LayerHandle t = LayerHandle {getLayerType :: IORef (LayerType t) }
-instance Show (LayerHandle t) where
-    show h = "LH"
+instance Show (LayerType t) where
+    show :: LayerType t -> String
+    show (LayerType l) = show l
+
 
 consume :: (forall l. (P.Layer l t) => l -> b) -> LayerType t -> b
 consume f (LayerType l) = f l
@@ -30,7 +33,7 @@ class HasLayer a t | a -> t where
 instance HasLayer (LayerHandle t) t where
     layer = id
 
-newLayerHandle :: (P.Layer l t) => l -> IO (LayerHandle t)
+newLayerHandle :: (P.Layer l t, Show l) => l -> IO (LayerHandle t)
 newLayerHandle x = do
     let lt = LayerType x
     LayerHandle <$> newIORef lt

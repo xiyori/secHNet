@@ -26,7 +26,7 @@ main :: IO ()
 main = do
     compiled <- compileNN mlp
     let mapping = fromList [("inp", (zero @Double 5 1)), ("inp2", (zero @Double 5 1))]
-    print compiled
+    -- print compiled
     fw <- forward compiled mapping
     grads <- backward compiled fw
     print fw

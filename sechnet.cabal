@@ -41,7 +41,9 @@ library
         Data.Dataset.Dataset,
         NN.NNDesigner,
         NN.Autograd,
-        NN.Optimizer
+        NN.Optimizer,
+        Handle.OptimizerHandle,
+        Handle.TrainerHandle
     build-depends:
       base ^>=4.16
       , free
