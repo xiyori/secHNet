@@ -14,7 +14,8 @@ import Data.IORef(IORef, newIORef, readIORef, writeIORef)
 
 data LayerType t = forall l. (P.Layer l t) => LayerType l
 newtype LayerHandle t = LayerHandle {getLayerType :: IORef (LayerType t) }
-
+instance Show (LayerHandle t) where
+    show h = "LH"
 
 consume :: (forall l. (P.Layer l t) => l -> b) -> LayerType t -> b
 consume f (LayerType l) = f l

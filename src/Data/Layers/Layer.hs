@@ -45,7 +45,7 @@ data Linear t = Linear {
 }
 
 makeLinear :: Int -> Int -> Linear Double
-makeLinear x y = Linear (zero x y) (zero x y) (zero x 1) (zero x 1) (zero y 1)
+makeLinear i o = Linear (zero o i) (zero o i) (zero o 1) (zero o 1) (zero i 1)
 
 instance Num t => Layer (Linear t) t where
   forward :: Linear t -> Matrix t -> (Linear t, Matrix t)
@@ -70,8 +70,8 @@ newtype ReLU t = ReLU {
   reluInput :: Matrix t
 }
 
-makeReLU :: Int -> Int -> ReLU Double
-makeReLU x y = ReLU (zero y 1)
+makeReLU :: Int -> ReLU Double
+makeReLU i = ReLU (zero i 1)
 
 instance (Ord t, Num t) => Layer (ReLU t) t where
   forward :: ReLU t -> Matrix t -> (ReLU t, Matrix t)
@@ -102,13 +102,13 @@ data CrossEntropyLogits t = CrossEntropyLogits {
 }
 
 makeCrossEntropyLogits :: Int -> Int -> CrossEntropyLogits Double
-makeCrossEntropyLogits x y = CrossEntropyLogits 0 (zero y 1)
+makeCrossEntropyLogits label i = CrossEntropyLogits label (zero i 1)
 
 instance Floating t => Layer (CrossEntropyLogits t) t where
   forward :: CrossEntropyLogits t -> Matrix t -> (CrossEntropyLogits t, Matrix t)
   forward (CrossEntropyLogits target _) logits =
     (CrossEntropyLogits target logits,
-    fromLists [[-(logits ! (target, 1)) + (log . sum . fmap exp) logits]])
+    fromLists [[-(logits ! (target + 1, 1)) + (log . sum . fmap exp) logits]])
 
   backward :: CrossEntropyLogits t -> Matrix t -> (CrossEntropyLogits t, Matrix t)
   backward crossEntropy@(CrossEntropyLogits target logits) _ =

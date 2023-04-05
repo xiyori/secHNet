@@ -42,7 +42,6 @@ library
         NN.NNDesigner,
         NN.Autograd,
         NN.Optimizer
-        -- Handle.OptimizerHandle
     build-depends:
       base ^>=4.16
       , free

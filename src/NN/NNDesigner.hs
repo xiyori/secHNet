@@ -6,8 +6,8 @@
 
 module NN.NNDesigner where
 
-import Data.Matrix
-import Data.HashMap(Map, empty, insert)
+import Data.Matrix(Matrix)
+import Data.HashMap(Map, empty, insert, (!))
 import Data.Layers.Layer(Layer)
 import Control.Monad(forM)
 import Handle.LayerHandle
@@ -17,12 +17,12 @@ import Control.Monad.State.Class(MonadState, modify, gets)
 import Control.Monad.Trans.State(StateT (runStateT))
 import GHC.Read (readField)
 
-data Node t = Input String | LayerNode (LayerHandle t) Int | Int :+: Int | SubmoduleNode (NeuralNetwork t) (Map String Int)
+data Node t = Input String | LayerNode (LayerHandle t) Int | Int :+: Int | SubmoduleNode (NeuralNetwork t) (Map String Int) deriving Show
 data NeuralNetwork t = NeuralNetwork {
     nodes :: [Node t], 
     inputs :: Map String Int, 
     outputs :: Map String Int, 
-    output :: Int}
+    output :: Int} deriving Show
 
 class (Monad m, MonadState (NeuralNetwork t) m) => MonadNNDesigner m t | m -> t where
     newNode :: Node t -> m Int
@@ -35,14 +35,14 @@ instance (Monad m) => MonadNNDesigner (StateT (NeuralNetwork t) m) t where
         gets ((\x -> x - 1) . length . nodes)
         where
           helper (NeuralNetwork nodes inputs outputs output) = 
-            NeuralNetwork (node: nodes) (insert name (length nodes) inputs) outputs output
+            NeuralNetwork (nodes ++ [node]) (insert name (length nodes) inputs) outputs output
     
     newNode node = do
         modify helper 
         gets ((\x -> x - 1) . length. nodes)
         where
           helper (NeuralNetwork nodes inputs outputs output) = 
-            NeuralNetwork (node: nodes) inputs outputs output
+            NeuralNetwork (nodes ++ [node]) inputs outputs output
 
     registerOutput idx name = modify helper 
         where
@@ -80,5 +80,6 @@ copyNN (NeuralNetwork nodes inputs outputs output)= do
             pure $ SubmoduleNode newNN inp
         helper other = pure other
 
-
+changeOutput :: NeuralNetwork t -> String -> NeuralNetwork t
+changeOutput (NeuralNetwork nodes inputs outputs output) newOut = NeuralNetwork nodes inputs outputs (outputs ! newOut)
             

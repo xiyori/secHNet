@@ -3,13 +3,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 module NN.Autograd where
 
+import Data.Foldable(foldrM)
 import Control.Monad (forM_, unless)
-import Data.Array.IO(IOArray, newArray, readArray, writeArray)
+import Data.Array.IO(IOArray, newArray, readArray, writeArray, getElems)
 import qualified Data.HashMap as H
 import Data.Matrix
 import Control.Monad.IO.Class(MonadIO, liftIO)
 import qualified Handle.LayerHandle as L
 import NN.NNDesigner
+    ( NeuralNetwork(NeuralNetwork),
+      Node(SubmoduleNode, Input, (:+:), LayerNode) )
 import Data.Bits (Bits(xor))
 
 forward :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> H.Map String (Matrix t) -> m (Matrix t)
@@ -43,7 +46,7 @@ forwardHelper (NeuralNetwork nodes inputs outputs output) inpValue cache = do
             forward submodule inpVals
         
 
-backward :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Matrix t -> m (H.Map String (Matrix t))
+backward :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Matrix t -> m (H.Map String (Maybe(Matrix t)))
 backward nn@(NeuralNetwork nodes inputs outputs output) outValue = do
     used <- liftIO $ newArray (0, length nodes - 1) False
     grad <- liftIO $ newArray (0, length nodes - 1) Nothing
@@ -52,11 +55,16 @@ backward nn@(NeuralNetwork nodes inputs outputs output) outValue = do
 
 
 backwardHelper :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Matrix t -> 
-    IOArray Int Bool -> IOArray Int (Maybe (Matrix t)) -> IOArray Int [Int] -> m (H.Map String (Matrix t))
+    IOArray Int Bool -> IOArray Int (Maybe (Matrix t)) -> IOArray Int [Int] -> m (H.Map String (Maybe (Matrix t)))
 
 backwardHelper (NeuralNetwork nodes inputs outputs output) outValue used grad transposed = do
     makeTransposed output
-    pure $ H.empty
+    liftIO $ writeArray grad output (Just outValue)
+    forM_ inputs relax
+    outGrads <- foldrM (\(k, v) l -> do
+        g <- liftIO $ readArray grad v
+        pure ((k, g) : l)) [] (H.toList inputs)
+    pure $ H.fromList outGrads
     where
         makeTransposed :: (Monad m, MonadIO m) => Int -> m()
         makeTransposed i = 
@@ -65,14 +73,18 @@ backwardHelper (NeuralNetwork nodes inputs outputs output) outValue used grad tr
                 (x :+: y) -> do
                     xx <- liftIO $ readArray transposed x
                     liftIO $ writeArray transposed x (i : xx)
+                    makeTransposed x
                     yy <- liftIO $ readArray transposed y
                     liftIO $ writeArray transposed y (i : yy)
+                    makeTransposed y
                 (LayerNode _ x) -> do
                     xx <- liftIO $ readArray transposed x
                     liftIO $ writeArray transposed x (i : xx)
+                    makeTransposed x
                 (SubmoduleNode _ map) -> forM_ map (\x -> do
                     xx <- liftIO $ readArray transposed x
                     liftIO $ writeArray transposed x (i : xx) 
+                    makeTransposed x
                     )
     
         addGrad i val = do
@@ -81,27 +93,36 @@ backwardHelper (NeuralNetwork nodes inputs outputs output) outValue used grad tr
                            Nothing -> Just val
                            Just x -> Just (x + val) 
             liftIO $ writeArray grad i newG
-         
+
+        relax :: (Monad m, MonadIO m) => Int -> m()
         relax i = do
             u <- liftIO $ readArray used i -- We haven't calculated grad yet
             unless u $ do
-                    out <- readArray transposed i
+                    out <- liftIO $ readArray transposed i
                     forM_ out relax -- We traverse all our outputs
                     case nodes !! i of 
                         (Input _) -> pure()
                         (x :+: y) -> do
                             g <- liftIO $ readArray grad i
-                            let (Just gg) = g
-                            addGrad x gg
-                            addGrad y gg
+                            case g of 
+                                Just gg -> do
+                                    addGrad x gg
+                                    addGrad y gg
+                                Nothing -> pure ()
                         (LayerNode l inp) -> do
                             g <- liftIO $ readArray grad i
-                            let (Just gg) = g
-                            inpGrad <- liftIO $ L.backward l gg
-                            addGrad inp inpGrad
+                            case g of
+                                Just gg -> do
+                                    inpGrad <- liftIO $ L.backward l gg
+                                    addGrad inp inpGrad
+                                Nothing -> pure ()
                         (SubmoduleNode submodule inp) -> do
                             g <- liftIO $ readArray grad i
-                            let (Just gg) = g
-                            inpGrads <- backward submodule gg
-                            let keys = H.keys inp
-                            forM_ keys (\key -> addGrad (inp H.! key) (inpGrads H.! key))
+                            case g of
+                                Just gg -> do
+                                    inpGrads <- backward submodule gg
+                                    let keys = H.keys inp
+                                    forM_ keys (\key -> case (inpGrads H.! key) of 
+                                                    Just inpGrad -> addGrad (inp H.! key) inpGrad
+                                                    Nothing -> pure())
+                                Nothing -> pure ()
