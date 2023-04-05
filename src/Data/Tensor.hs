@@ -104,7 +104,7 @@ getElem (Tensor shape dat) index
   | validateIndex shape index =
     (dat A.! arrayIndex) M.! matrixIndex
   | otherwise =
-    error "tensor shape mismatch"
+    error "incorrect index"
   where
     (arrayIndex, matrixIndex) = toInternal shape index
 

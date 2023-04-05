@@ -10,7 +10,7 @@ type MultiIndex = [[Int]]
 splitIndex :: Index -> (Index, MIndex)
 splitIndex = go []
   where
-    go [] [] = error "wrong index dimensions"
+    go [] [] = error "empty index not allowed"
     go [] [i] = ([1], (i, 1))
     go [] [i, j] = ([1], (i, j))
     go first [i, j] = (reverse first, (i, j))
