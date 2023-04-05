@@ -32,14 +32,14 @@ instance (Monad m) => MonadNNDesigner (StateT (NeuralNetwork t) m) t where
     newNode :: (Monad m) => Node t -> StateT (NeuralNetwork t) m Int
     newNode node@(Input name) = do
         modify helper 
-        gets ((-) 1 . length . nodes)
+        gets ((\x -> x - 1) . length . nodes)
         where
           helper (NeuralNetwork nodes inputs outputs output) = 
             NeuralNetwork (node: nodes) (insert name (length nodes) inputs) outputs output
     
     newNode node = do
         modify helper 
-        gets ((-) 1 . length. nodes)
+        gets ((\x -> x - 1) . length. nodes)
         where
           helper (NeuralNetwork nodes inputs outputs output) = 
             NeuralNetwork (node: nodes) inputs outputs output
@@ -49,7 +49,7 @@ instance (Monad m) => MonadNNDesigner (StateT (NeuralNetwork t) m) t where
           helper (NeuralNetwork nodes inputs outputs output) = 
             NeuralNetwork nodes inputs (insert name idx outputs) output
 
-newLayer :: (Layer l f t, Functor f, MonadIO m, MonadNNDesigner m t) => l -> Int -> m Int
+newLayer :: (Layer l t, MonadIO m, MonadNNDesigner m t) => l -> Int -> m Int
 newLayer l inp = do
     handle <- liftIO $ newLayerHandle l
     newNode $ LayerNode handle inp
