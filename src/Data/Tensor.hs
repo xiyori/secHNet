@@ -1,4 +1,5 @@
 {-# LANGUAGE InstanceSigs #-}
+
 module Data.Tensor where
 
 import Control.Applicative
@@ -43,13 +44,13 @@ instance Foldable Tensor where
 
 instance (Num t) => Num (Tensor t) where
   (+) :: Num t => Tensor t -> Tensor t -> Tensor t
-  (+) = _performWithBroadcasting (+)
+  (+) = performWithBroadcasting (+)
 
   (-) :: Num t => Tensor t -> Tensor t -> Tensor t
-  (-) = _performWithBroadcasting (-)
+  (-) = performWithBroadcasting (-)
 
   (*) :: Num t => Tensor t -> Tensor t -> Tensor t
-  (*) = _performWithBroadcasting (*)
+  (*) = performWithBroadcasting (*)
 
   abs :: Num t => Tensor t -> Tensor t
   abs = fmap abs
@@ -62,7 +63,7 @@ instance (Num t) => Num (Tensor t) where
 
 instance (Fractional t) => Fractional (Tensor t) where
   (/) :: Fractional t => Tensor t -> Tensor t -> Tensor t
-  (/) = _performWithBroadcasting (/)
+  (/) = performWithBroadcasting (/)
 
   fromRational :: Fractional t => Rational -> Tensor t
   fromRational = pure . fromRational
@@ -99,7 +100,11 @@ eye shape =
   )
 
 getElem :: Tensor t -> Index -> t
-getElem (Tensor shape dat) index = (dat A.! arrayIndex) M.! matrixIndex
+getElem (Tensor shape dat) index
+  | validateIndex shape index =
+    (dat A.! arrayIndex) M.! matrixIndex
+  | otherwise =
+    error "tensor shape mismatch"
   where
     (arrayIndex, matrixIndex) = toInternal shape index
 
@@ -108,7 +113,7 @@ getElem (Tensor shape dat) index = (dat A.! arrayIndex) M.! matrixIndex
 
 getElems :: Tensor t -> MultiIndex -> Tensor t
 getElems x@(Tensor shape _) multiIndex =
-  tensor newShape (\index -> x !? liftA2 (!!) expandedIndex index)
+  tensor newShape (\index -> x !? zipWith (!!) expandedIndex index)
   where
     expandedIndex =
       zipWith (
@@ -131,7 +136,7 @@ flatten x@(Tensor shape _) =
   tensor [numel x] $ (x !?) . fromInt shape . head
 
 mean :: Fractional t => Tensor t -> t
-mean x = sum x / numel x
+mean x = sum x / fromIntegral (numel x)
 
 swapdim :: Tensor t -> Int -> Int -> Tensor t
 swapdim x@(Tensor shape _) from to =
@@ -154,9 +159,9 @@ dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
 (@) :: Num t => Tensor t -> Tensor t -> Tensor t
 (@) = dot
 
-_performWithBroadcasting ::
+performWithBroadcasting ::
   (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
-_performWithBroadcasting f x1@(Tensor shape1 _) x2@(Tensor shape2 _)
+performWithBroadcasting f x1@(Tensor shape1 _) x2@(Tensor shape2 _)
   | shape1 == [1] = fmap (f $ x1 !? shape1) x2
   | shape2 == [1] = fmap (flip f $ x2 !? shape2) x1
   | otherwise     = uncurry (liftA2 f) $ broadcast x1 x2

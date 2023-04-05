@@ -75,6 +75,15 @@ indexRange0 high = indexRange (map (const 1) high) high
 countIndex :: Index -> Int
 countIndex = foldl' (*) 1
 
+-- | Total number of elements with indices between 1 and high.
+validateIndex :: Index -> Index -> Bool
+validateIndex shape index
+  | length shape /= length index                  = False
+  | or $ zipWith (>) index shape                  = False
+  | or $ zipWith (\i dim -> i < -dim) index shape = False
+  | 0 `elem` index                                = False
+  | otherwise                                     = True
+
 -- | Swap index dimensions.
 swapElementsAt :: Int -> Int -> Index -> Index
 swapElementsAt i j index =
