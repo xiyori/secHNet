@@ -9,7 +9,7 @@
 module Handle.LayerHandle where
 
 import qualified Data.Layers.Layer as P
-import Data.Matrix
+import Data.Tensor
 import Data.Functor ((<&>))
 import Data.IORef(IORef, newIORef, readIORef, writeIORef)
 
@@ -41,7 +41,7 @@ newLayerHandle x = do
 copyLayer :: LayerHandle t -> IO (LayerHandle t)
 copyLayer (LayerHandle ref) = readIORef ref >>= newIORef <&> LayerHandle
 
-forward :: (HasLayer a t, Floating t) => a -> (Matrix t) -> IO (Matrix t)
+forward :: (HasLayer a t, Floating t) => a -> (Tensor t) -> IO (Tensor t)
 forward hand inp = do
     let ref = getLayerType $ layer hand
     lt <- readIORef ref
@@ -49,7 +49,7 @@ forward hand inp = do
     writeIORef ref newLayer
     pure res
 
-backward :: (HasLayer a t, Floating t) => a -> (Matrix t) -> IO (Matrix t)
+backward :: (HasLayer a t, Floating t) => a -> (Tensor t) -> IO (Tensor t)
 backward hand inp = do
     let ref = getLayerType $ layer hand
     lt <- readIORef ref
@@ -58,26 +58,26 @@ backward hand inp = do
     pure res
 
  
-getParams :: (HasLayer a t) => a -> IO (P.Params (Matrix t))
+getParams :: (HasLayer a t) => a -> IO (P.Params (Tensor t))
 getParams hand = do
     let ref = getLayerType $ layer hand
     lt <- readIORef ref
     pure $ consume P.getParams lt
 
-setParams :: (HasLayer a t) => a -> P.Params (Matrix t) -> IO()
+setParams :: (HasLayer a t) => a -> P.Params (Tensor t) -> IO()
 setParams hand params = do
     let ref = getLayerType $ layer hand
     lt <- readIORef ref
     let (newLayer, _) = consumeModify (\l -> (P.setParams l params, ())) lt
     writeIORef ref newLayer
 
-getGrads :: (HasLayer a t) => a -> IO (P.Params (Matrix t))
+getGrads :: (HasLayer a t) => a -> IO (P.Params (Tensor t))
 getGrads hand = do
     let ref = getLayerType $ layer hand
     lt <- readIORef ref
     pure $ consume P.getGrads lt
 
-setGrads :: (HasLayer a t) => a -> P.Params (Matrix t) -> IO()
+setGrads :: (HasLayer a t) => a -> P.Params (Tensor t) -> IO()
 setGrads hand params = do
     let ref = getLayerType $ layer hand
     lt <- readIORef ref

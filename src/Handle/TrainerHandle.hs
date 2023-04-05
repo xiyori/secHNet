@@ -4,7 +4,7 @@
 
 module Handle.TrainerHandle where
 
-import Data.Matrix
+import Data.Tensor
 import NN.Optimizer ( Optimizer(step), Momentum)
 import Handle.OptimizerHandle ( HasMomentum(..), MomentumHandle(MomentumHandle, getParams, getMomentum) )
 import qualified NN.NNDesigner as NN
@@ -30,7 +30,7 @@ instance HasTrainer TrainerHandle where
 instance HasMomentum TrainerHandle Params where
     momentum = getMomentumHandle . trainer
 
-zeroLike :: Params (Matrix Double) -> Params (Matrix Double)
+zeroLike :: Params (Tensor Double) -> Params (Tensor Double)
 zeroLike (Flat f) = Flat $ map (\m -> zero (nrows m) (ncols m)) f
 zeroLike (Nested f) = Nested $ map zeroLike f
 
@@ -55,12 +55,12 @@ optimize = do
     liftIO $ writeIORef (getMomentum optHandle) newOpt
     liftIO $ writeIORef (getParams optHandle) newOptParams
 
-forward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Map String (Matrix Double) -> m (Matrix Double)
+forward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Map String (Tensor Double) -> m (Tensor Double)
 forward inp = do
     model <- asks (getModel . trainer)
     AG.forward model inp
 
-backward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Matrix Double -> m (Map String (Maybe(Matrix Double)))
+backward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Tensor Double -> m (Map String (Maybe(Tensor Double)))
 backward inp = do
     model <- asks (getModel . trainer)
     AG.backward model inp

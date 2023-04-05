@@ -7,7 +7,7 @@ import Data.Foldable(foldrM)
 import Control.Monad (forM_, unless)
 import Data.Array.IO(IOArray, newArray, readArray, writeArray, getElems)
 import qualified Data.HashMap as H
-import Data.Matrix
+import Data.Tensor
 import Control.Monad.IO.Class(MonadIO, liftIO)
 import qualified Handle.LayerHandle as L
 import NN.NNDesigner
@@ -15,12 +15,12 @@ import NN.NNDesigner
       Node(SubmoduleNode, Input, (:+:), LayerNode) )
 import Data.Bits (Bits(xor))
 
-forward :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> H.Map String (Matrix t) -> m (Matrix t)
+forward :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> H.Map String (Tensor t) -> m (Tensor t)
 forward nn@(NeuralNetwork nodes inputs outputs output) inp = 
     liftIO (newArray (0, length nodes - 1) Nothing) >>= forwardHelper nn inp
 
-forwardHelper :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> H.Map String (Matrix t) -> 
-    IOArray Int (Maybe (Matrix t)) -> m (Matrix t)
+forwardHelper :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> H.Map String (Tensor t) -> 
+    IOArray Int (Maybe (Tensor t)) -> m (Tensor t)
 forwardHelper (NeuralNetwork nodes inputs outputs output) inpValue cache = do
     cached output
     where
@@ -46,7 +46,7 @@ forwardHelper (NeuralNetwork nodes inputs outputs output) inpValue cache = do
             forward submodule inpVals
         
 
-backward :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Matrix t -> m (H.Map String (Maybe(Matrix t)))
+backward :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Tensor t -> m (H.Map String (Maybe(Tensor t)))
 backward nn@(NeuralNetwork nodes inputs outputs output) outValue = do
     used <- liftIO $ newArray (0, length nodes - 1) False
     grad <- liftIO $ newArray (0, length nodes - 1) Nothing
@@ -54,8 +54,8 @@ backward nn@(NeuralNetwork nodes inputs outputs output) outValue = do
     backwardHelper nn outValue used grad transposed
 
 
-backwardHelper :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Matrix t -> 
-    IOArray Int Bool -> IOArray Int (Maybe (Matrix t)) -> IOArray Int [Int] -> m (H.Map String (Maybe (Matrix t)))
+backwardHelper :: (Monad m, MonadIO m, Floating t) => NeuralNetwork t -> Tensor t -> 
+    IOArray Int Bool -> IOArray Int (Maybe (Tensor t)) -> IOArray Int [Int] -> m (H.Map String (Maybe (Tensor t)))
 
 backwardHelper (NeuralNetwork nodes inputs outputs output) outValue used grad transposed = do
     makeTransposed output

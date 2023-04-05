@@ -7,7 +7,7 @@
 module NN.NNDesigner where
 
 import Data.Foldable (foldrM )
-import Data.Matrix(Matrix)
+import Data.Tensor(Tensor)
 import Data.HashMap(Map, empty, insert, (!))
 import Data.Layers.Layer(Layer, Params(Nested, Flat))
 import Control.Monad(forM, forM_)
@@ -86,28 +86,28 @@ changeOutput :: NeuralNetwork t -> String -> NeuralNetwork t
 changeOutput (NeuralNetwork nodes inputs outputs output) newOut = NeuralNetwork nodes inputs outputs (outputs ! newOut)
 
 
-getParams :: (MonadIO m) => NeuralNetwork t -> m (Params (Matrix t))
+getParams :: (MonadIO m) => NeuralNetwork t -> m (Params (Tensor t))
 getParams (NeuralNetwork nodes inputs outputs output) = Nested <$> mapM getOne nodes
     where
         getOne (LayerNode l _) = liftIO $ LH.getParams l
         getOne (SubmoduleNode s _) = getParams s
         getOne _ = pure $ Flat []
 
-getGrads :: (MonadIO m) => NeuralNetwork t -> m (Params (Matrix t))
+getGrads :: (MonadIO m) => NeuralNetwork t -> m (Params (Tensor t))
 getGrads (NeuralNetwork nodes inputs outputs output) = Nested <$> mapM getOne nodes
     where
         getOne (LayerNode l _) = liftIO $ LH.getGrads l
         getOne (SubmoduleNode s _) = getGrads s
         getOne _ = pure $ Flat []
 
-setParams :: (MonadIO m) => NeuralNetwork t -> Params (Matrix t) -> m()
+setParams :: (MonadIO m) => NeuralNetwork t -> Params (Tensor t) -> m()
 setParams (NeuralNetwork nodes inputs outputs output) (Nested params) = forM_ (zip params nodes) setOne
     where
         setOne (param, LayerNode l _) = liftIO $ LH.setParams l param
         setOne (param, SubmoduleNode sm _) = setParams sm param
         setOne (_, _) = pure ()
 
-setGrads :: (MonadIO m) => NeuralNetwork t -> Params (Matrix t) -> m()
+setGrads :: (MonadIO m) => NeuralNetwork t -> Params (Tensor t) -> m()
 setGrads (NeuralNetwork nodes inputs outputs output) (Nested params) = forM_ (zip params nodes) setOne
     where
         setOne (param, LayerNode l _) = liftIO $ LH.setGrads l param

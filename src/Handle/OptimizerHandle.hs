@@ -5,7 +5,7 @@
 
 module Handle.OptimizerHandle where
 
-import Data.Matrix (Matrix)
+import Data.Tensor (Tensor)
 import Data.Layers.Layer (Params)
 import NN.Optimizer(Optimizer, Momentum (Momentum))
 import Data.IORef(IORef, newIORef)
@@ -14,7 +14,7 @@ import Control.Monad.IO.Class(MonadIO, liftIO)
 
 data MomentumHandle f = MomentumHandle { 
     getMomentum :: IORef Momentum, 
-    getParams :: IORef (f (Matrix Double))
+    getParams :: IORef (f (Tensor Double))
 }
 
 class HasMomentum m f | m -> f where

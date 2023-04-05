@@ -6,87 +6,148 @@
 module Data.Layers.Layer where
 
 import Control.Applicative(liftA2)
-import Data.Matrix (Matrix, elementwise, transpose,
-                    fromLists, matrix, nrows, ncols, (!), zero, identity)
+import System.Random
+import Data.Tensor
 
 data Params t = Flat [t] | Nested [Params t]
 instance Functor Params where
+  fmap :: (a -> b) -> Params a -> Params b
   fmap f (Flat x) = Flat $ map f x
   fmap f (Nested x) = Nested $ map (fmap f) x
 
 instance Applicative Params where
+    pure :: a -> Params a
     pure x = Flat [x]
-    liftA2 f (Flat x) (Flat y) = Flat $ map (\(a, b) -> f a b) $ zip x y
-    liftA2 f (Nested x) (Nested y) = Nested $ map (\(a, b) -> liftA2 f a b) $ zip x y
+
+    liftA2 :: (a -> b -> c) -> Params a -> Params b -> Params c
+    liftA2 f (Flat x) (Flat y) = Flat $ zipWith f x y
+    liftA2 f (Nested x) (Nested y) = Nested $ zipWith (liftA2 f) x y
     liftA2 _ _ _ = error "Incorrect shape"
 
 class Layer a t | a -> t where
   -- | layer -> input tensor -> (updated layer, output tensor)
-  forward :: a -> Matrix t -> (a, Matrix t)
-  -- | layer -> output gradient -> (updated layer, input gradient)
-  backward :: a -> Matrix t -> (a, Matrix t)
-  getParams :: a -> Params (Matrix t)
-  setParams :: a -> Params (Matrix t) -> a
-  getGrads :: a -> Params (Matrix t)
-  setGrads :: a -> Params (Matrix t) -> a
-    
+  forward :: a -> Tensor t -> (a, Tensor t)
 
-data Linear t = Linear {
-  -- | [n, m]
-  linearWeight :: Matrix t,
-  -- | [n, m]
-  linearGradWeight :: Matrix t,
-  -- | [n, 1]
-  linearBias :: Matrix t,
-  -- | [n, 1]
-  linearGradBias :: Matrix t,
-  -- | [m, 1]
-  linearInput :: Matrix t
+  -- | layer -> output gradient -> (updated layer, input gradient)
+  backward :: a -> Tensor t -> (a, Tensor t)
+  getParams :: a -> Params (Tensor t)
+  setParams :: a -> Params (Tensor t) -> a
+  getGrads :: a -> Params (Tensor t)
+  setGrads :: a -> Params (Tensor t) -> a
+
+
+data Conv2d t = Conv2d {
+  -- | [out_channels, in_channels, kernel, kernel]
+  conv2dWeight :: Tensor t,
+  -- | [out_channels, in_channels, kernel, kernel]
+  conv2dGradWeight :: Tensor t,
+  -- | [out_channels]
+  conv2dBias :: Tensor t,
+  -- | [out_channels]
+  conv2dGradBias :: Tensor t,
+  -- | [batch, in_channels]
+  conv2dInput :: Tensor t,
+  _stride :: Int,
+  _padding :: Int
 }
 
-makeLinear :: Int -> Int -> Linear Double
-makeLinear i o = Linear (zero o i) (zero o i) (zero o 1) (zero o 1) (zero i 1)
+-- | In channels -> out channels -> kernel_size -> stride -> padding ->
+-- | random gen
+makeConv2d :: (RandomGen g) =>
+  Int -> Int -> Int -> Int -> Int -> g -> Conv2d Double
+makeConv2d inChannels outChannels kernel stride padding gen =
+  Conv2d (weight * std) (zeros shape)
+    (bias * std) (zeros [outChannels]) 0
+    stride padding
+  where
+    std = 1 / sqrt (fromIntegral $ inChannels * kernel * kernel)
+    (weight, newGen1) = randn shape gen
+    (bias, newGen2) = randn [outChannels] newGen1
+    shape = [inChannels, outChannels, kernel, kernel]
+
+instance Num t => Layer (Conv2d t) t where
+  forward :: Conv2d t -> Tensor t -> (Conv2d t, Tensor t)
+  forward = _
+
+  backward :: Conv2d t -> Tensor t -> (Conv2d t, Tensor t)
+  backward = _
+
+  getParams x = Flat [conv2dWeight x, conv2dBias x]
+  getGrads x = Flat [conv2dGradWeight x, conv2dGradBias x]
+  setParams (Conv2d _ gradWeight _ gradBias input s p) (Flat l) =
+    Conv2d (head l) gradWeight (l !! 1) gradBias input s p
+  setGrads (Conv2d weight _ bias _ input s p) (Flat l) =
+    Conv2d weight (head l) bias (l !! 1) input s p
+
+
+data Linear t = Linear {
+  -- | [out_channels, in_channels]
+  linearWeight :: Tensor t,
+  -- | [out_channels, in_channels]
+  linearGradWeight :: Tensor t,
+  -- | [out_channels]
+  linearBias :: Tensor t,
+  -- | [out_channels]
+  linearGradBias :: Tensor t,
+  -- | [batch, in_channels]
+  linearInput :: Tensor t
+}
+
+-- | In channels -> out channels -> random gen
+makeLinear :: (RandomGen g) => Int -> Int -> g -> Linear Double
+makeLinear inChannels outChannels gen =
+  Linear (weight * std) (zeros shape)
+    (bias * std) (zeros [outChannels]) 0
+  where
+    std = 1 / sqrt (fromIntegral inChannels)
+    (weight, newGen1) = randn shape gen
+    (bias, newGen2) = randn [outChannels] newGen1
+    shape = [inChannels, outChannels]
 
 instance Num t => Layer (Linear t) t where
-  forward :: Linear t -> Matrix t -> (Linear t, Matrix t)
+  forward :: Linear t -> Tensor t -> (Linear t, Tensor t)
   forward (Linear weight gradWeight bias gradBias _) input =
-    (Linear weight gradWeight bias gradBias input, weight * input + bias)
+    (Linear weight gradWeight bias gradBias input,
+    input @ weight + bias)
 
-  backward :: Linear t -> Matrix t -> (Linear t, Matrix t)
+  backward :: Linear t -> Tensor t -> (Linear t, Tensor t)
   backward (Linear weight gradWeight bias gradBias input) grad_output =
     (Linear weight (gradWeight + newGradWeight)
     bias (gradBias + newGradBias) input, grad_input)
       where
-        grad_input = transpose weight * grad_output
-        newGradWeight = grad_output * transpose input
-        newGradBias = grad_output
+        grad_input = grad_output @ transpose weight
+        newGradWeight = transpose input @ grad_output
+        newGradBias = sumAlongDim grad_output 0
 
   getParams x = Flat [linearWeight x, linearBias x]
   getGrads x = Flat [linearGradWeight x, linearGradBias x]
-  setParams (Linear _ gradWeight _ gradBias input) (Flat l) = Linear (head l) gradWeight (l !! 1) gradBias input
-  setGrads (Linear weight _ bias _ input) (Flat l) = Linear weight (head l) bias (l !! 1) input
+  setParams (Linear _ gradWeight _ gradBias input) (Flat l) =
+    Linear (head l) gradWeight (l !! 1) gradBias input
+  setGrads (Linear weight _ bias _ input) (Flat l) =
+    Linear weight (head l) bias (l !! 1) input
+
 
 instance Show (Linear t) where
-  show (Linear weight _ _ _ _) = "Linear (" ++ show (ncols weight) ++ "," ++ show (nrows weight) ++")"
+  show (Linear weight _ _ _ _) = "Linear (" ++ show ((shape weight) !! 1) ++ "," ++ show ((shape weight) !! 0) ++")"
 
 newtype ReLU t = ReLU {
-  reluInput :: Matrix t
+  reluInput :: Tensor t
 }
 
 makeReLU :: Int -> ReLU Double
-makeReLU i = ReLU (zero i 1)
+makeReLU i = ReLU (zeros [i, 1])
 
 instance (Ord t, Num t) => Layer (ReLU t) t where
-  forward :: ReLU t -> Matrix t -> (ReLU t, Matrix t)
+  forward :: ReLU t -> Tensor t -> (ReLU t, Tensor t)
   forward _ input = (ReLU input, fmap relu input)
     where
       relu x
         | x > 0     = x
         | otherwise = 0
 
-  backward :: ReLU t -> Matrix t -> (ReLU t, Matrix t)
+  backward :: ReLU t -> Tensor t -> (ReLU t, Tensor t)
   backward relu@(ReLU input) grad_output =
-    (relu, elementwise zeroMask grad_output input)
+    (relu, liftA2 zeroMask grad_output input)
       where
         zeroMask x mask
           | mask > 0  = x
@@ -98,45 +159,52 @@ instance (Ord t, Num t) => Layer (ReLU t) t where
   setGrads = const
 
 instance Show (ReLU t) where
-  show (ReLU inp) = "ReLU (" ++ show (nrows inp) ++ ")"
+  show (ReLU inp) = "ReLU (" ++ show ((shape inp) !! 0) ++ ")"
 
 
+
+-- | Class index from 1 to @n_classes@
 data CrossEntropyLogits t = CrossEntropyLogits {
-  -- | Class index from 1 to @n_classes@
-  сrossEntropyTarget :: Int,
-  -- | [n, 1]
-  сrossEntropyInput :: Matrix t
+  -- | [batch]
+  сrossEntropyTarget :: Tensor Int,
+  -- | [batch, n_classes]
+  сrossEntropyInput :: Tensor t
 }
 
-makeCrossEntropyLogits :: Int -> Int -> CrossEntropyLogits Double
-makeCrossEntropyLogits label i = CrossEntropyLogits label (zero i 1)
+makeCrossEntropyLogits :: CrossEntropyLogits Double
+makeCrossEntropyLogits = CrossEntropyLogits 0 0
 
 instance Floating t => Layer (CrossEntropyLogits t) t where
-  forward :: CrossEntropyLogits t -> Matrix t -> (CrossEntropyLogits t, Matrix t)
+  forward :: Floating t =>
+    CrossEntropyLogits t -> Tensor t -> (CrossEntropyLogits t, Tensor t)
   forward (CrossEntropyLogits target _) logits =
     (CrossEntropyLogits target logits,
-    fromLists [[-(logits ! (target + 1, 1)) + (log . sum . fmap exp) logits]])
+    -logitsForAnswers + log (sumAlongDim (exp logits) (-1)))
+    where
+      batch = head $ shape logits
+      logitsForAnswers = logits !. [arange 1 batch, target]
 
-  backward :: CrossEntropyLogits t -> Matrix t -> (CrossEntropyLogits t, Matrix t)
+  backward :: Floating t =>
+    CrossEntropyLogits t -> Tensor t -> (CrossEntropyLogits t, Tensor t)
   backward crossEntropy@(CrossEntropyLogits target logits) _ =
     (crossEntropy, -targetMask + softmax)
       where
-        targetMask = matrix (nrows logits) (ncols logits) setClasses
-        setClasses (i, _)
-          | i == target = 1
-          | otherwise   = 0
-        softmax = fmap (divideBySum . exp) logits
-        divideBySum = (/ (sum . fmap exp) logits)
-  
+        targetMask = tensor (shape logits) setClasses
+        setClasses [i, j]
+          | target !? [i] == j = 1
+          | otherwise          = 0
+        softmax = expLogits / sumAlongDimKeepDims expLogits (-1)
+        expLogits = exp logits
+
   getParams x = Flat []
   getGrads x = Flat []
   setParams = const
   setGrads = const
-  
 
-setCrossEntropyTarget :: CrossEntropyLogits t -> Int -> CrossEntropyLogits t
+
+setCrossEntropyTarget :: CrossEntropyLogits t -> Tensor Int -> CrossEntropyLogits t
 setCrossEntropyTarget (CrossEntropyLogits target input) newTarget =
   CrossEntropyLogits newTarget input
 
 instance Show (CrossEntropyLogits t) where
-  show (CrossEntropyLogits _ inp) = "CrossEntropyLogits (" ++ show (nrows inp) ++ ")"
+  show (CrossEntropyLogits _ inp) = "CrossEntropyLogits (" ++ show ((shape inp) !! 0) ++ ")"

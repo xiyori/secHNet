@@ -6,11 +6,11 @@
 
 module Data.Dataset.Dataset where
 
-import qualified Data.Matrix as M
+import qualified Data.Tensor as T
 import Data.ByteString as BS
 import Control.Monad.IO.Class(MonadIO)
 
-data CIFAR10 = CIFAR10 {images :: [M.Matrix Int], labels :: [Int]}
+data CIFAR10 = CIFAR10 {images :: [T.Tensor Int], labels :: [Int]}
 
 class (Monad m) => Dataset s m t | s -> t where
     (!!) :: s -> Int -> m t
@@ -22,13 +22,15 @@ partitionBS sz = snd . BS.foldr' (\x (s, l@(block : tail)) ->
     else  (1, [x]:l)
     ) (0, [[]])
 
-batch :: FilePath -> IO [M.Matrix Int]
+batch :: FilePath -> IO [T.Tensor Int]
 batch path = do
     bytes <- BS.readFile path
     let chunks = partitionBS 3073 bytes
     let vecs = Prelude.map (Prelude.map fromIntegral . Prelude.tail) chunks
-    let mats = Prelude.map (M.fromList 32 32) vecs
+    let mats = Prelude.map (T.tensor (\idx -> vecs !! (convertIdx idx)) [3 32 32])
     return mats
+    where
+        convertIdx idx = (idx !! 0) * 1024 + (idx !! 1) * 32 + (idx !! 2)
 
 label :: FilePath -> IO [Int]
 label path = do
@@ -46,8 +48,8 @@ cifar = do
         labs <- Prelude.concat <$> mapM (label . ((path <>) . (++ ext)) . show) nums
         return $ CIFAR10 images labs
 
-instance (MonadIO m) => Dataset CIFAR10 m (M.Matrix Int, Int) where
-    (!!) :: MonadIO m => CIFAR10 -> Int -> m (M.Matrix Int, Int)
+instance (MonadIO m) => Dataset CIFAR10 m (T.Tensor Int, Int) where
+    (!!) :: MonadIO m => CIFAR10 -> Int -> m (T.Tensor Int, Int)
     (!!) cif i = do
         let image = images cif Prelude.!! i
         let label = labels cif Prelude.!! i

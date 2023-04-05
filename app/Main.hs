@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Main where
-import Data.Matrix(zero, Matrix, setSize, identity)
+import Data.Tensor(Tensor)
 import NN.NNDesigner(MonadNNDesigner, newNode, newLayer, Node((:+:), Input), compileNN)
 import Control.Monad.IO.Class(MonadIO, liftIO)
 import Data.Layers.Layer(makeLinear, makeReLU, makeCrossEntropyLogits)
@@ -30,13 +30,13 @@ mlp = do
     lin3 <- newLayer (makeLinear 256 10) relu2
     pure ("output", lin3)
 
-flattenAndToDouble :: Matrix Int -> Matrix Double
+flattenAndToDouble :: Tensor Int -> Tensor Double
 flattenAndToDouble m = setSize 0 1024 1 (fmap fromIntegral m) 
 
-train :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => ConduitT [(Matrix Int, Int)] Void m ()
+train :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => ConduitT [(Tensor Int, Int)] Void m ()
 train = awaitForever batchStep
     where
-        batchStep :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => [(Matrix Int, Int)] -> m()
+        batchStep :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => [(Tensor Int, Int)] -> m()
         batchStep batch = do
             liftIO $ putStrLn "Batch arrived"
             let (feat, labels) = unzip batch
@@ -45,14 +45,14 @@ train = awaitForever batchStep
             forM_ (zip dFeat labels) (uncurry trainStep)
             optimize
 
-        trainStep :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => (Matrix Double) -> Int -> m()
+        trainStep :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => (Tensor Double) -> Int -> m()
         trainStep m l = do
             let mapping = fromList [("input", m)]
             outputs <- forward mapping
-            liftIO $ print l
+            -- liftIO $ print l
             let lossfunc = makeCrossEntropyLogits l 10
             let (lossfunc1, loss) = L.forward lossfunc outputs 
-            liftIO $ print loss
+            -- liftIO $ print loss
             let (_, grads) = L.backward lossfunc1 (identity 1)
             backward grads
             pure ()
