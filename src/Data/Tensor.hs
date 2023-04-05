@@ -3,10 +3,12 @@
 module Data.Tensor where
 
 import Control.Applicative
-import Data.Array (array, listArray, elems, bounds, Array, (!))
+import Data.Array (array, listArray, elems, bounds, Array, (!), (//))
 import qualified Data.Array as A
 import Data.Matrix (matrix, Matrix, (!))
 import qualified Data.Matrix as M
+import System.Random
+import Data.Random.Normal
 import Data.Index
 
 data Tensor t = Tensor {
@@ -71,6 +73,35 @@ instance (Fractional t) => Fractional (Tensor t) where
   fromRational :: Fractional t => Rational -> Tensor t
   fromRational = pure . fromRational
 
+instance (Floating t) => Floating (Tensor t) where
+  pi :: Floating t => Tensor t
+  pi = pure pi
+  exp :: Floating t => Tensor t -> Tensor t
+  exp = fmap exp
+  log :: Floating t => Tensor t -> Tensor t
+  log = fmap log
+  sin :: Floating t => Tensor t -> Tensor t
+  sin = fmap sin
+  cos :: Floating t => Tensor t -> Tensor t
+  cos = fmap cos
+  asin :: Floating t => Tensor t -> Tensor t
+  asin = fmap asin
+  acos :: Floating t => Tensor t -> Tensor t
+  acos = fmap acos
+  atan :: Floating t => Tensor t -> Tensor t
+  atan = fmap atan
+  sinh :: Floating t => Tensor t -> Tensor t
+  sinh = fmap sinh
+  cosh :: Floating t => Tensor t -> Tensor t
+  cosh = fmap cosh
+  asinh :: Floating t => Tensor t -> Tensor t
+  asinh = fmap asinh
+  acosh :: Floating t => Tensor t -> Tensor t
+  acosh = fmap acosh
+  atanh :: Floating t => Tensor t -> Tensor t
+  atanh = fmap atanh
+
+
 tensor :: Index -> (Index -> t) -> Tensor t
 tensor shape builder =
   Tensor shape
@@ -101,6 +132,18 @@ eye shape =
         1
       else 0
   )
+
+randn :: (RandomGen g, Random t, Floating t) => Index -> g -> (Tensor t, g)
+randn shape gen =
+  (tensor shape (\ index -> randomArray A.! toInt shape index), newGen)
+  where
+    n = toInt shape shape
+    (randomArray, newGen) = foldr (
+      \ i (accum, g) ->
+        let (randomValue, newG) = normal g in
+        (accum // [(toInt shape i, randomValue)], newG)
+      ) (listArray (1, n) $ replicate n 0, gen)
+      $ indexRange0 shape
 
 getElem :: Tensor t -> Index -> t
 getElem (Tensor shape dat) index
@@ -142,8 +185,14 @@ flatten x@(Tensor shape _) =
 mean :: Fractional t => Tensor t -> t
 mean x = sum x / fromIntegral (numel x)
 
-swapdim :: Tensor t -> Int -> Int -> Tensor t
-swapdim x@(Tensor shape _) from to =
+sumAlongDim :: Tensor t -> Int -> Tensor t
+sumAlongDim = _
+
+insertDim :: Tensor t -> Int -> Tensor t
+insertDim = _
+
+swapDim :: Tensor t -> Int -> Int -> Tensor t
+swapDim x@(Tensor shape _) from to =
   tensor (swapElementsAt from to shape) ((x !?) . swapElementsAt from to)
 
 dot :: Num t => Tensor t -> Tensor t -> Tensor t
@@ -154,6 +203,7 @@ dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
     (arrayShape, (matrixRows1, _)) = splitIndex shape1
     (_, (_, matrixCols2)) = splitIndex shape2
 
+-- | An infix synonym for dot.
 (@) :: Num t => Tensor t -> Tensor t -> Tensor t
 (@) = dot
 
