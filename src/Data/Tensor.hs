@@ -12,10 +12,12 @@ import System.Random
 import Data.Random.Normal
 import Data.Index
 
+import Foreign.Marshal.Utils(fromBool)
+
 data Tensor t = Tensor {
   shape :: Index,
   tensorData :: Array Int (Matrix t)
-}
+} deriving Show
 
 type TensorIndex = [Tensor Int]
 
@@ -75,6 +77,7 @@ instance (Fractional t) => Fractional (Tensor t) where
 
   fromRational :: Fractional t => Rational -> Tensor t
   fromRational = pure . fromRational
+
 
 instance (Floating t) => Floating (Tensor t) where
   pi :: Floating t => Tensor t

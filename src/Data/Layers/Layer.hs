@@ -67,10 +67,10 @@ makeConv2d inChannels outChannels kernel stride padding gen =
 
 instance Num t => Layer (Conv2d t) t where
   forward :: Conv2d t -> Tensor t -> (Conv2d t, Tensor t)
-  forward = _
+  forward = error "TODO"
 
   backward :: Conv2d t -> Tensor t -> (Conv2d t, Tensor t)
-  backward = _
+  backward = error "TODO"
 
   getParams x = Flat [conv2dWeight x, conv2dBias x]
   getGrads x = Flat [conv2dGradWeight x, conv2dGradBias x]

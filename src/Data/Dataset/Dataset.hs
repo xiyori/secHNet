@@ -27,10 +27,10 @@ batch path = do
     bytes <- BS.readFile path
     let chunks = partitionBS 3073 bytes
     let vecs = Prelude.map (Prelude.map fromIntegral . Prelude.tail) chunks
-    let mats = Prelude.map (T.tensor (\idx -> vecs !! (convertIdx idx)) [3 32 32])
+    let mats = Prelude.map (\pic -> T.tensor [3, 32, 32] (\idx -> pic Prelude.!! (convertIdx idx))) vecs
     return mats
     where
-        convertIdx idx = (idx !! 0) * 1024 + (idx !! 1) * 32 + (idx !! 2)
+        convertIdx idx = ((idx Prelude.!! 0) - 1) * 1024 + ((idx Prelude.!! 1) - 1) * 32 + (idx Prelude.!! 2) - 1
 
 label :: FilePath -> IO [Int]
 label path = do

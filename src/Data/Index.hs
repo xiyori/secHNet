@@ -61,15 +61,15 @@ indexRange low high = reverse $ go [low]
   where
     go range@(lastIndex : _) =
       if nextIndex == high then
-        range
-      else nextIndex : range
+        nextIndex : range
+      else go (nextIndex : range)
       where
         nextIndex =
           reverse
           $ snd
           $ foldr (
             \ (l, h, i) (needAdd, index) ->
-              if needAdd && i == h - 1 then
+              if needAdd && i == h then
                 (True, l : index)
               else if needAdd then
                 (False, i + 1 : index)

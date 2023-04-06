@@ -4,7 +4,7 @@
 
 module Handle.TrainerHandle where
 
-import Data.Tensor
+import Data.Tensor(Tensor(Tensor), zeros, shape)
 import NN.Optimizer ( Optimizer(step), Momentum)
 import Handle.OptimizerHandle ( HasMomentum(..), MomentumHandle(MomentumHandle, getParams, getMomentum) )
 import qualified NN.NNDesigner as NN
@@ -31,7 +31,7 @@ instance HasMomentum TrainerHandle Params where
     momentum = getMomentumHandle . trainer
 
 zeroLike :: Params (Tensor Double) -> Params (Tensor Double)
-zeroLike (Flat f) = Flat $ map (\m -> zero (nrows m) (ncols m)) f
+zeroLike (Flat f) = Flat $ map (\m -> zeros (shape m)) f
 zeroLike (Nested f) = Nested $ map zeroLike f
 
 zeroGrad  :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => m ()

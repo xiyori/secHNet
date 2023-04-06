@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Main where
-import Data.Tensor(Tensor)
+import Data.Tensor(Tensor, tensor, getElem, flatten, sumAlongDim, eye)
 import NN.NNDesigner(MonadNNDesigner, newNode, newLayer, Node((:+:), Input), compileNN)
 import Control.Monad.IO.Class(MonadIO, liftIO)
 import Data.Layers.Layer(makeLinear, makeReLU, makeCrossEntropyLogits)
@@ -18,20 +18,25 @@ import Conduit(ConduitT, awaitForever, runConduit, (.|))
 import Control.Monad (forever, forM_)
 import NN.Optimizer(Momentum(Momentum))
 import Data.Void(Void)
+import System.Random(newStdGen)
+import Data.Index (indexRange0)
 
 
 mlp :: (MonadNNDesigner m Double, MonadIO m) => m (String, Int)
 mlp = do
+    rand <- liftIO newStdGen
     inp1 <- newNode $ Input "input"
-    lin1 <- newLayer (makeLinear 1024 1024) inp1
-    relu1 <- newLayer (makeReLU 1024) lin1
-    lin2 <- newLayer (makeLinear 1024 256) relu1
-    relu2 <- newLayer (makeReLU 256) lin2
-    lin3 <- newLayer (makeLinear 256 10) relu2
+    lin1 <- newLayer (makeLinear 1024 256 rand) inp1
+    relu1 <- newLayer (makeReLU 256) lin1
+    lin2 <- newLayer (makeLinear 256 128 rand) relu1
+    relu2 <- newLayer (makeReLU 128) lin2
+    lin3 <- newLayer (makeLinear 128 10 rand) relu2
     pure ("output", lin3)
 
+
 flattenAndToDouble :: Tensor Int -> Tensor Double
-flattenAndToDouble m = setSize 0 1024 1 (fmap fromIntegral m) 
+flattenAndToDouble m = 
+    let dbl = fmap fromIntegral m in flatten $ sumAlongDim dbl 0
 
 train :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => ConduitT [(Tensor Int, Int)] Void m ()
 train = awaitForever batchStep
@@ -41,21 +46,24 @@ train = awaitForever batchStep
             liftIO $ putStrLn "Batch arrived"
             let (feat, labels) = unzip batch
             let dFeat = map flattenAndToDouble feat
-            zeroGrad
-            forM_ (zip dFeat labels) (uncurry trainStep)
-            optimize
+            let featT = tensor [length dFeat, 1024] (\idx -> getElem (dFeat !! (head idx)) (tail idx))
+            let labelT = tensor [length labels] (\idx -> labels !! (head idx))
 
-        trainStep :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => (Tensor Double) -> Int -> m()
-        trainStep m l = do
-            let mapping = fromList [("input", m)]
+            liftIO $ print labelT
+
+            zeroGrad
+            
+            let mapping = fromList [("input", featT)]
             outputs <- forward mapping
-            -- liftIO $ print l
-            let lossfunc = makeCrossEntropyLogits l 10
-            let (lossfunc1, loss) = L.forward lossfunc outputs 
-            -- liftIO $ print loss
-            let (_, grads) = L.backward lossfunc1 (identity 1)
+            
+            let lossfunc = makeCrossEntropyLogits
+            let lossfunc1 = L.setCrossEntropyTarget lossfunc labelT
+            let (lossfunc2, loss) = L.forward lossfunc outputs 
+            liftIO $ print loss
+            let (_, grads) = L.backward lossfunc2 (pure 1)
             backward grads
-            pure ()
+
+            optimize
 
     
 
@@ -67,5 +75,5 @@ main = do
     ds <- DS.cifar
     putStrLn "Starting train"
     let loader = randomSample ds
-    let pipeline = loader .| (toBatch 32) .| train
+    let pipeline = loader .| (toBatch 2) .| train
     runReaderT (runConduit pipeline) handle

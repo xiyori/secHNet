@@ -33,11 +33,14 @@ executable sechnet
       , matrix
       , conduit
       , mtl
+      , random
     hs-source-dirs:   app
     default-language: Haskell2010
 
 library
     exposed-modules: 
+        Data.Tensor,
+        Data.Index,
         Data.Layers.Layer,
         Handle.LayerHandle,
         Data.Dataset.Dataset,
