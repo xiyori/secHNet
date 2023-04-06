@@ -7,14 +7,16 @@ import Data.List (nub)
 import Conduit (MonadIO(liftIO), yieldMany, awaitNonNull)
 import Control.Monad.Trans.Class (lift)
 import Data.Void(Void)
+import Control.Monad(forM_)
 
-randomSample :: (Dataset s m t, MonadIO m) => s -> ConduitT () t m ()
+randomSample :: (Dataset s m t, MonadIO m, Show t) => s -> ConduitT () t m ()
 randomSample ds = do
     gen <- liftIO newStdGen
     len <- lift $ DAS.length ds
-    let inds = take len $ nub $ randomRs (0, len - 1) gen
-    rand <- lift $ mapM (ds DAS.!!) inds
-    yieldMany rand
+    let inds = randomRs (0, len - 1) gen
+    forM_ inds $ (\i -> do
+        sample <- lift $ ds DAS.!! i
+        yield sample)
 
 toBatch :: Monad m => Int -> ConduitT t [t] m ()
 toBatch size = helper []

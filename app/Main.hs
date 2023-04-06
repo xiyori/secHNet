@@ -75,5 +75,5 @@ main = do
     ds <- DS.cifar
     putStrLn "Starting train"
     let loader = randomSample ds
-    let pipeline = loader .| (toBatch 2) .| train
+    let pipeline = loader .| (toBatch 32) .| train
     runReaderT (runConduit pipeline) handle
