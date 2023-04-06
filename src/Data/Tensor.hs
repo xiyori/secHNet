@@ -3,8 +3,8 @@
 module Data.Tensor where
 
 import Control.Applicative
-import Data.Array (array, listArray, elems, bounds, Array, (!), (//))
-import qualified Data.Array as A
+import Data.Vector (generate, fromList, Vector, (!), (//))
+import qualified Data.Vector as V
 import Data.Matrix (matrix, elementwiseUnsafe, Matrix, (!))
 import qualified Data.Matrix as M
 import Data.List
@@ -16,7 +16,7 @@ import System.IO.Unsafe
 
 data Tensor t = Tensor {
   shape :: Index,
-  tensorData :: Array Int (Matrix t)
+  tensorData :: Vector (Matrix t)
 } deriving Show
 
 type TensorIndex = [Tensor Int]
@@ -26,26 +26,13 @@ instance Functor Tensor where
   fmap f (Tensor shape dat) =
     Tensor shape $ fmap (fmap f) dat
 
-instance (A.Ix i, Num i) => Applicative (Array i) where
-  pure :: (A.Ix i, Num i) => a -> Array i a
-  pure elem = array (1, 1) [(1, elem)]
-
-  liftA2 :: A.Ix i =>
-    (a -> b -> c) -> Array i a -> Array i b -> Array i c
-  liftA2 f x1 x2
-    | bounds x1 == bounds x2 =
-      listArray (bounds x1)
-      $ zipWith f (elems x1) (elems x2)
-    | otherwise              =
-      error "array size mismatch"
-
 instance Applicative Tensor where
   pure :: a -> Tensor a
   pure elem = tensor [1] $ const elem
 
   liftA2 :: (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
   liftA2 f (Tensor shape dat1) (Tensor _ dat2) =
-    Tensor shape $ liftA2 (elementwiseUnsafe f) dat1 dat2
+    Tensor shape $ V.zipWith (elementwiseUnsafe f) dat1 dat2
 
 instance Foldable Tensor where
   foldMap :: Monoid m => (a -> m) -> Tensor a -> m
@@ -110,13 +97,13 @@ instance (Floating t) => Floating (Tensor t) where
 tensor :: Index -> (Index -> t) -> Tensor t
 tensor shape builder =
   Tensor shape
-  $ array (1, toInt arrayShape arrayShape)
-  $ map (
-    \ index -> (
-      toInt arrayShape index,
-      matrix matrixRows matrixCols $ builder . mergeIndex index
-    ))
-  $ indexRange0 arrayShape
+  $ generate (countIndex arrayShape) (
+    \ i ->
+      let index = fromInt arrayShape i in
+        matrix matrixRows matrixCols
+        $ builder
+        . mergeIndex index
+  )
   where
     (arrayShape, (matrixRows, matrixCols)) = splitIndex shape
 
@@ -134,15 +121,15 @@ eye shape = tensor shape $ fromBool . allEqual
 
 randn :: (RandomGen g, Random t, Floating t) => Index -> g -> (Tensor t, g)
 randn shape gen =
-  (tensor shape (\ index -> randomArray A.! toInt shape index), newGen)
+  (tensor shape (\ index -> randomVector V.! toInt shape index), newGen)
   where
-    n = toInt shape shape
-    (randomArray, newGen) = foldr (
-      \ i (accum, g) ->
-        let (randomValue, newG) = normal g in
-        (accum // [(toInt shape i, randomValue)], newG)
-      ) (listArray (1, n) $ replicate n 0, gen)
-      $ indexRange0 shape
+    n = countIndex shape
+    (randomList, newGen) = go n [] gen
+    go 0 xs g = (xs, g)
+    go count xs g =
+      let (randomValue, newG) = normal g in
+        go (count - 1) (randomValue : xs) newG
+    randomVector = fromList randomList
 
 -- | low -> high (inclusive)
 arange :: Num t => Int -> Int -> Tensor t
@@ -169,7 +156,7 @@ dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
 getElem :: Tensor t -> Index -> t
 getElem (Tensor shape dat) index
   | validateIndex shape nIndex =
-    (dat A.! arrayIndex) M.! matrixIndex
+    (dat V.! arrayIndex) M.! matrixIndex
   | otherwise =
     error
     $ "incorrect index "
@@ -223,6 +210,8 @@ advancedIndex x tensorIndex
 numel :: Tensor t -> Int
 numel (Tensor shape _) = countIndex shape
 
+item :: Tensor t -> t
+item x = x !? [1]
 
 transpose :: Tensor t -> Tensor t
 transpose (Tensor shape dat) =
@@ -309,8 +298,8 @@ swapDim x@(Tensor shape _) from to =
 performWithBroadcasting ::
   (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
 performWithBroadcasting f x1@(Tensor shape1 _) x2@(Tensor shape2 _)
-  | shape1 == [1] = fmap (f $ x1 !? shape1) x2
-  | shape2 == [1] = fmap (flip f $ x2 !? shape2) x1
+  | shape1 == [1] = fmap (f $ item x1) x2
+  | shape2 == [1] = fmap (flip f $ item x2) x1
   | otherwise     = uncurry (liftA2 f) $ broadcast x1 x2
 
 verifyBroadcastable :: Tensor a -> Tensor b -> Bool

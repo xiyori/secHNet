@@ -45,8 +45,7 @@ toInternal shape index =
 -- | Flatten tensor index to integer index.
 toInt :: Index -> Index -> Int
 toInt shape index =
-  (+) 1
-  $ sum
+  sum
   $ zipWith (
     \ coeff i -> coeff * (i - 1)
   ) (_dimCoeffs shape) index
@@ -56,7 +55,7 @@ fromInt :: Index -> Int -> Index
 fromInt shape index =
   snd . foldl' (
     \ (i, accum) coeff -> (i `mod` coeff, ((i `div` coeff) + 1) : accum)
-  ) (index - 1, [])
+  ) (index, [])
   $ _dimCoeffs shape
 
 -- | Coefficients for index flattening.
