@@ -6,6 +6,10 @@ type Index = [Int]
 type MIndex = (Int, Int)
 type Slices = [[Int]]
 
+-- | List getItem (!!) with indexing starting from 1.
+(!*) :: [t] -> Int -> t
+(!*) xs i = xs !! (i - 1)
+
 -- | Separate last 2 elements of a tensor index.
 splitIndex :: Index -> (Index, MIndex)
 splitIndex = go []
@@ -20,15 +24,16 @@ splitIndex = go []
 mergeIndex :: Index -> MIndex -> Index
 mergeIndex arrayIndex (i, j) = arrayIndex ++ [i, j]
 
--- | Parse negative values.
+-- | Parse negative index value.
+normalizeItem :: Int -> Int -> Int
+normalizeItem dim i =
+  if i < 0 then
+    dim + i + 1
+  else i
+
+-- | Parse negative index values.
 normalizeIndex :: Index -> Index -> Index
-normalizeIndex =
-  zipWith (
-    \ dim i ->
-      if i < 0 then
-        dim + 1 - i
-      else i
-  )
+normalizeIndex = zipWith normalizeItem
 
 -- | Convert tensor index to internal representation.
 toInternal :: Index -> Index -> (Int, MIndex)
@@ -37,20 +42,24 @@ toInternal shape index =
   where
     (arrayIndex, matrixIndex) = splitIndex index
 
--- | Convert tensor index to flat integer index.
+-- | Flatten tensor index to integer index.
 toInt :: Index -> Index -> Int
 toInt shape index =
-  foldl' (\ accum (coeff, i) -> accum + coeff * (i - 1)) 1
-  $ zip (_dimCoeffs shape) index
+  (+) 1
+  $ sum
+  $ zipWith (
+    \ coeff i -> coeff * (i - 1)
+  ) (_dimCoeffs shape) index
 
--- | Convert flat integer index to tensor index.
+-- | Convert flattened integer index to tensor index.
 fromInt :: Index -> Int -> Index
 fromInt shape index =
   snd . foldl' (
-    \ (i, accum) coeff -> (i `mod` coeff, div i coeff : accum)
-  ) (index, [])
+    \ (i, accum) coeff -> (i `mod` coeff, ((i `div` coeff) + 1) : accum)
+  ) (index - 1, [])
   $ _dimCoeffs shape
 
+-- | Coefficients for index flattening.
 _dimCoeffs :: [Int] -> [Int]
 _dimCoeffs =
   foldr (\ dim coeffs@(coeff : _) -> dim * coeff : coeffs) [1] . tail
@@ -94,14 +103,14 @@ validateIndex shape index
 
 -- | Swap index dimensions.
 swapElementsAt :: Int -> Int -> Index -> Index
-swapElementsAt i j index =
-  left ++ [elemJ] ++ middle ++ [elemI] ++ right
-  where
-    elemI = index !! i
-    elemJ = index !! j
-    left = take i index
-    middle = take (j - i - 1) (drop (i + 1) index)
-    right = drop (j + 1) index
+swapElementsAt i j index = error "TODO use !*"
+  -- left ++ [elemJ] ++ middle ++ [elemI] ++ right
+  -- where
+  --   elemI = index !! i
+  --   elemJ = index !! j
+  --   left = take i index
+  --   middle = take (j - i - 1) (drop (i + 1) index)
+  --   right = drop (j + 1) index
 
 allEqual :: Eq a => [a] -> Bool
 allEqual xs = all (== head xs) $ tail xs

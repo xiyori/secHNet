@@ -5,14 +5,14 @@ module Data.Tensor where
 import Control.Applicative
 import Data.Array (array, listArray, elems, bounds, Array, (!), (//))
 import qualified Data.Array as A
-import Data.Matrix (matrix, Matrix, (!))
+import Data.Matrix (matrix, elementwiseUnsafe, Matrix, (!))
 import qualified Data.Matrix as M
 import Data.List
 import System.Random
 import Data.Random.Normal
 import Data.Index
-
-import Foreign.Marshal.Utils(fromBool)
+import Foreign
+import System.IO.Unsafe
 
 data Tensor t = Tensor {
   shape :: Index,
@@ -45,7 +45,7 @@ instance Applicative Tensor where
 
   liftA2 :: (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
   liftA2 f (Tensor shape dat1) (Tensor _ dat2) =
-    Tensor shape $ liftA2 (liftA2 f) dat1 dat2
+    Tensor shape $ liftA2 (elementwiseUnsafe f) dat1 dat2
 
 instance Foldable Tensor where
   foldMap :: Monoid m => (a -> m) -> Tensor a -> m
@@ -77,7 +77,6 @@ instance (Fractional t) => Fractional (Tensor t) where
 
   fromRational :: Fractional t => Rational -> Tensor t
   fromRational = pure . fromRational
-
 
 instance (Floating t) => Floating (Tensor t) where
   pi :: Floating t => Tensor t
@@ -131,7 +130,7 @@ ones :: Num t => Index -> Tensor t
 ones shape = full shape 1
 
 eye :: Num t => Index -> Tensor t
-eye shape = tensor shape (\ index -> fromBool $ allEqual index)
+eye shape = tensor shape $ fromBool . allEqual
 
 randn :: (RandomGen g, Random t, Floating t) => Index -> g -> (Tensor t, g)
 randn shape gen =
@@ -169,20 +168,24 @@ dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
 
 getElem :: Tensor t -> Index -> t
 getElem (Tensor shape dat) index
-  | validateIndex shape normalizedIndex =
+  | validateIndex shape nIndex =
     (dat A.! arrayIndex) M.! matrixIndex
   | otherwise =
-    error "incorrect index"
+    error
+    $ "incorrect index "
+    ++ show index
+    ++ " for shape "
+    ++ show shape
   where
-    normalizedIndex = normalizeIndex shape index
-    (arrayIndex, matrixIndex) = toInternal shape normalizedIndex
+    nIndex = normalizeIndex shape index
+    (arrayIndex, matrixIndex) = toInternal shape nIndex
 
 (!?) :: Tensor t -> Index -> t
 (!?) = getElem
 
 slice :: Tensor t -> Slices -> Tensor t
 slice x@(Tensor shape _) slices =
-  tensor newShape (\ index -> x !? zipWith (!!) expandedIndex index)
+  tensor newShape (\ index -> x !? zipWith (!*) expandedIndex index)
   where
     expandedIndex =
       zipWith (
@@ -207,7 +210,11 @@ advancedIndex x tensorIndex
         x !? map (!? index) tensorIndex
     )
   | otherwise =
-    error "incorrect index"
+    error
+    $ "incorrect index "
+    ++ show tensorIndex
+    ++ " for shape "
+    ++ show (shape x)
 
 (!.) :: Tensor t -> TensorIndex -> Tensor t
 (!.) = advancedIndex
@@ -234,12 +241,13 @@ sumAlongDim x@(Tensor shape _) dim =
     \ index ->
       let slices = map pure index in
         sum . slice x
-        $ take (dim - 1) slices
-        ++ [[1 .. (shape !! dim)]]
-        ++ drop (dim - 1) slices
+        $ take (nDim - 1) slices
+        ++ [[1 .. (shape !* normalizeItem (length shape) nDim)]]
+        ++ drop (nDim - 1) slices
   )
   where
-    newShape = take (dim - 1) shape ++ drop dim shape
+    nDim = normalizeItem (length shape) dim
+    newShape = take (nDim - 1) shape ++ drop nDim shape
 
 sumAlongDimKeepDims :: Num t => Tensor t -> Int -> Tensor t
 sumAlongDimKeepDims x@(Tensor shape _) dim =
@@ -247,21 +255,23 @@ sumAlongDimKeepDims x@(Tensor shape _) dim =
     \ index ->
       let slices = map pure index in
         sum . slice x
-        $ take (dim - 1) slices
-        ++ [[1 .. (shape !! dim)]]
-        ++ drop dim slices
+        $ take (nDim - 1) slices
+        ++ [[1 .. (shape !* nDim)]]
+        ++ drop nDim slices
   )
   where
-    newShape = take (dim - 1) shape ++ [1] ++ drop dim shape
+    nDim = normalizeItem (length shape) dim
+    newShape = take (nDim - 1) shape ++ [1] ++ drop nDim shape
 
 insertDim :: Tensor t -> Int -> Tensor t
 insertDim x@(Tensor shape _) dim =
   tensor newShape (
     \ index ->
-        x !? (take (dim - 1) index ++ drop dim index)
+        x !? (take (nDim - 1) index ++ drop nDim index)
   )
   where
-    newShape = take dim shape ++ [1] ++ drop dim shape
+    nDim = normalizeItem (length shape) dim
+    newShape = take nDim shape ++ [1] ++ drop nDim shape
 
 -- | tensor -> dim -> times
 repeatAlongDim :: Tensor t -> Int -> Int -> Tensor t
@@ -269,17 +279,20 @@ repeatAlongDim x@(Tensor shape _) dim times =
   tensor newShape (
     \ index ->
         x !? (
-          take (dim - 1) index
-          ++ [index !! dim `mod` currentDim]
-          ++ drop dim index
+          take (nDim - 1) index
+          ++ [(((index !* nDim) - 1) `mod` currentDim) + 1]
+          ++ drop nDim index
         )
   )
   where
-    currentDim = shape !! dim
+    nDim = normalizeItem (length shape) dim
+    currentDim = shape !* nDim
     newShape =
-      take (dim - 1) shape
+      take (nDim - 1) shape
       ++ [currentDim * times]
-      ++ drop dim shape
+      ++ drop nDim shape
+    -- debugPrint x =
+    --   unsafePerformIO $ print x >> return x
 
 -- | tensor -> dims -> times
 repeatAlongDims :: Tensor t -> [Int] -> [Int] -> Tensor t
@@ -302,9 +315,12 @@ performWithBroadcasting f x1@(Tensor shape1 _) x2@(Tensor shape2 _)
 
 verifyBroadcastable :: Tensor a -> Tensor b -> Bool
 verifyBroadcastable (Tensor shape1 _) (Tensor shape2 _) =
-  and $ zipWith (
-    \ dim1 dim2 -> dim1 == dim2 || dim1 == 1 || dim2 == 1
-  ) shape1 shape2
+  length shape1 == length shape2
+  && and (
+    zipWith (
+      \ dim1 dim2 -> dim1 == dim2 || dim1 == 1 || dim2 == 1
+    ) shape1 shape2
+  )
 
 broadcast :: Tensor a -> Tensor b -> (Tensor a, Tensor b)
 broadcast x1@(Tensor shape1 _) x2@(Tensor shape2 _)
@@ -312,9 +328,18 @@ broadcast x1@(Tensor shape1 _) x2@(Tensor shape2 _)
     (repeatAlongDims x1 dims1 times1,
      repeatAlongDims x2 dims2 times2)
   | otherwise =
-    error "tensors can not be broadcasted"
+    error
+    $ "tensors "
+    ++ show shape1
+    ++ " "
+    ++ show shape2
+    ++ " can not be broadcasted"
   where
-    dims1 = elemIndices 1 shape1
-    dims2 = elemIndices 1 shape1
-    times1 = map (shape2 !!) dims1
-    times2 = map (shape1 !!) dims2
+    zipped = zip3 [1 .. length shape1] shape1 shape2
+    (dims1, times1) = foldr addDim ([], []) zipped
+    (dims2, times2) = foldr (addDim . flipDims) ([], []) zipped
+    addDim (i, dim1, dim2) accum@(accumDims, accumTimes) =
+      if dim1 /= dim2 && dim1 == 1 then
+        (i : accumDims, dim2 : accumTimes)
+      else accum
+    flipDims (i, dim1, dim2) = (i, dim2, dim1)
