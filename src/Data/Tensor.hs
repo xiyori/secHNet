@@ -7,12 +7,11 @@ import Data.Vector (generate, fromList, Vector, (!), (//))
 import qualified Data.Vector as V
 import Data.Matrix (matrix, elementwiseUnsafe, Matrix, (!))
 import qualified Data.Matrix as M
-import Data.List
 import System.Random
 import Data.Random.Normal
 import Data.Index
 import Foreign
-import System.IO.Unsafe
+-- import System.IO.Unsafe
 
 data Tensor t = Tensor {
   shape :: Index,
@@ -36,8 +35,20 @@ instance Applicative Tensor where
 
 instance Foldable Tensor where
   foldMap :: Monoid m => (a -> m) -> Tensor a -> m
-  foldMap f x@(Tensor shape dat) =
+  foldMap f x@(Tensor _ dat) =
     foldMap (foldMap f) dat
+
+  foldr :: (a -> b -> b) -> b -> Tensor a -> b
+  foldr f accum x@(Tensor _ dat) =
+    foldr (flip $ foldr f) accum dat
+
+  sum :: Num t => Tensor t -> t
+  sum = uncurry (+) . foldr kahanSum (0, 0)
+    where
+      kahanSum item (sum, c) =
+        let y = item - c
+            t = sum + y in
+          (t, (t - sum) - y)
 
 instance (Num t) => Num (Tensor t) where
   (+) :: Num t => Tensor t -> Tensor t -> Tensor t
@@ -220,6 +231,19 @@ transpose (Tensor shape dat) =
 flatten :: Tensor t -> Tensor t
 flatten x@(Tensor shape _) =
   tensor [numel x] $ (x !?) . fromInt shape . head
+
+sumBabushka :: (Num t, Ord t) => Tensor t -> t
+sumBabushka = uncurry (+) . foldr kahanBabushkaSum (0, 0)
+  where
+    kahanBabushkaSum item (sum, c) =
+      if abs sum >= abs item then
+        let y = item - c
+            t = sum + y in
+          (t, (t - sum) - y)
+      else
+        let y = sum - c
+            t = item + y in
+          (t, (t - item) - y)
 
 mean :: Fractional t => Tensor t -> t
 mean x = sum x / fromIntegral (numel x)
