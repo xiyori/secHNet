@@ -5,7 +5,7 @@
 module Data.Tensor where
 
 import Control.Applicative
-import Data.MonoTraversable
+-- import Data.MonoTraversable
 import Data.Vector.Unboxed (generate, fromList, toList, singleton,
                             Unbox, Vector, (!), (//))
 import qualified Data.Vector.Unboxed as V
@@ -24,38 +24,38 @@ data (Unbox t) =>
     tensorData :: !(Vector t)
   } deriving Show
 
-type instance Element (Tensor t) = t
+-- type instance Element (Tensor t) = t
 
 type TensorIndex = [Tensor Int]
 
-instance Unbox t => MonoFunctor (Tensor t) where
-  omap :: (t -> t) -> Tensor t -> Tensor t
-  omap f (Tensor shape dat) = Tensor shape $ V.map f dat
-  {-# INLINE omap #-}
+-- instance Unbox t => MonoFunctor (Tensor t) where
+--   Data.Tensor.map :: (t -> t) -> Tensor t -> Tensor t
+--   Data.Tensor.map f (Tensor shape dat) = Tensor shape $ V.map f dat
+--   {-# INLINE Data.Tensor.map #-}
 
-instance Unbox t => MonoFoldable (Tensor t) where
-  ofoldMap :: (Monoid m) => (t -> m) -> Tensor t -> m
-  ofoldMap f (Tensor _ dat) = V.foldMap f dat
-  ofoldr :: (t -> b -> b) -> b -> Tensor t -> b
-  ofoldr f accum (Tensor _ dat) = V.foldr f accum dat
-  ofoldl' :: (a -> t -> a) -> a -> Tensor t -> a
-  ofoldl' f accum (Tensor _ dat) = V.foldl' f accum dat
-  ofoldr1Ex :: (t -> t -> t) -> Tensor t -> t
-  ofoldr1Ex f (Tensor _ dat) = V.foldr1 f dat
-  ofoldl1Ex' :: (t -> t -> t) -> Tensor t -> t
-  ofoldl1Ex' f (Tensor _ dat) = V.foldr1' f dat
-  {-# INLINE ofoldMap #-}
-  {-# INLINE ofoldr #-}
-  {-# INLINE ofoldl' #-}
-  {-# INLINE ofoldr1Ex #-}
-  {-# INLINE ofoldl1Ex' #-}
+-- instance Unbox t => MonoFoldable (Tensor t) where
+--   ofoldMap :: (Monoid m) => (t -> m) -> Tensor t -> m
+--   ofoldMap f (Tensor _ dat) = V.foldMap f dat
+--   ofoldr :: (t -> b -> b) -> b -> Tensor t -> b
+--   ofoldr f accum (Tensor _ dat) = V.foldr f accum dat
+--   ofoldl' :: (a -> t -> a) -> a -> Tensor t -> a
+--   ofoldl' f accum (Tensor _ dat) = V.foldl' f accum dat
+--   ofoldr1Ex :: (t -> t -> t) -> Tensor t -> t
+--   ofoldr1Ex f (Tensor _ dat) = V.foldr1 f dat
+--   ofoldl1Ex' :: (t -> t -> t) -> Tensor t -> t
+--   ofoldl1Ex' f (Tensor _ dat) = V.foldr1' f dat
+--   {-# INLINE ofoldMap #-}
+--   {-# INLINE ofoldr #-}
+--   {-# INLINE ofoldl' #-}
+--   {-# INLINE ofoldr1Ex #-}
+--   {-# INLINE ofoldl1Ex' #-}
 
 instance (Unbox t, Num t) => Num (Tensor t) where
   (+) = performWithBroadcasting (+)
   (-) = performWithBroadcasting (-)
   (*) = performWithBroadcasting (*)
-  abs = omap abs
-  signum = omap signum
+  abs = Data.Tensor.map abs
+  signum = Data.Tensor.map signum
   fromInteger = single . fromInteger
   {-# INLINE (+) #-}
   {-# INLINE (-) #-}
@@ -72,18 +72,18 @@ instance (Unbox t, Fractional t) => Fractional (Tensor t) where
 
 instance (Unbox t, Floating t) => Floating (Tensor t) where
   pi = single pi
-  exp = omap exp
-  log = omap log
-  sin = omap sin
-  cos = omap cos
-  asin = omap asin
-  acos = omap acos
-  atan = omap atan
-  sinh = omap sinh
-  cosh = omap cosh
-  asinh = omap asinh
-  acosh = omap acosh
-  atanh = omap atanh
+  exp = Data.Tensor.map exp
+  log = Data.Tensor.map log
+  sin = Data.Tensor.map sin
+  cos = Data.Tensor.map cos
+  asin = Data.Tensor.map asin
+  acos = Data.Tensor.map acos
+  atan = Data.Tensor.map atan
+  sinh = Data.Tensor.map sinh
+  cosh = Data.Tensor.map cosh
+  asinh = Data.Tensor.map asinh
+  acosh = Data.Tensor.map acosh
+  atanh = Data.Tensor.map atanh
   {-# INLINE pi #-}
   {-# INLINE exp #-}
   {-# INLINE log #-}
@@ -142,9 +142,6 @@ arange low high =
       fromIntegral $ V.head index + low - 1
   )
 
-
-map :: (Unbox a, Unbox b) => (a -> b) -> Tensor a -> Tensor b
-map f (Tensor shape dat) = Tensor shape $ V.map f dat
 
 elementwise :: (Unbox a, Unbox b, Unbox c) =>
   (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
@@ -277,16 +274,21 @@ transpose x = swapDim x (-1) (-2)
 flatten :: (Unbox t) => Tensor t -> Tensor t
 flatten x@(Tensor _ dat) = Tensor (singleton $ numel x) dat
 
+map :: (Unbox a, Unbox b) => (a -> b) -> Tensor a -> Tensor b
+map f (Tensor shape dat) = Tensor shape $ V.map f dat
+
 sum :: (Unbox t, Num t) => Tensor t -> t
-sum = fst . ofoldl' kahanSum (0, 0)
-    where
-      kahanSum (sum, c) item =
-        let y = item - c
-            t = sum + y in
-          (t, (t - sum) - y)
+sum (Tensor _ dat) =
+  fst $ V.foldl' kahanSum (0, 0) dat
+  where
+    kahanSum (sum, c) item =
+      let y = item - c
+          t = sum + y in
+        (t, (t - sum) - y)
 
 sumBabushka :: (Unbox t, Num t, Ord t) => Tensor t -> t
-sumBabushka = fst . ofoldl' kahanBabushkaSum (0, 0)
+sumBabushka (Tensor _ dat) =
+  fst $ V.foldl' kahanBabushkaSum (0, 0) dat
   where
     kahanBabushkaSum (sum, c) item =
       if abs sum >= abs item then
@@ -299,7 +301,7 @@ sumBabushka = fst . ofoldl' kahanBabushkaSum (0, 0)
           (t, (t - item) - y)
 
 mean :: (Unbox t, Fractional t) => Tensor t -> t
-mean x = osum x / fromIntegral (numel x)
+mean x = Data.Tensor.sum x / fromIntegral (numel x)
 
 sumAlongDim :: (Unbox t, Num t) =>
   Tensor t -> Int -> Tensor t
