@@ -1,13 +1,12 @@
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
+-- {-# LANGUAGE FlexibleInstances #-}
+-- {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Data.Tensor.Tensor where
+module Data.Tensor.Functional where
 
-import Control.Applicative
 import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
@@ -16,6 +15,7 @@ import System.Random
 import Data.Random.Normal
 import Data.Tensor.Index
 import Data.Tensor.Size
+import Data.Tensor.Definitions
 
 import System.IO.Unsafe
 import Foreign
@@ -24,92 +24,10 @@ import qualified Language.C.Inline as C
 import qualified Language.C.Inline.Unsafe as CU
 
 -- Use vector anti-quoters.
-C.context (C.baseCtx <> C.vecCtx <> C.funCtx)
+C.context (C.baseCtx <> C.vecCtx)
 -- Include C utils.
 C.include "cbits/cbits.h"
 
--- | Tensor data type.
-data (Storable t) =>
-  Tensor t = Tensor {
-    -- | Tensor shape.
-    shape :: !Index,
-    -- | Tensor stride in bytes, analogous to NumPy array stride.
-    stride :: !Index,
-    -- | Data offset in bytes.
-    offset :: !CInt,
-    -- | Internal data representation.
-    tensorData :: !(Vector t)
-  } deriving Show
-
--- | Slice data type.
-data Slice
-  = Int -- | Slice @start :. end@.
-        :. Int
-  | Slice -- | Slice @start :. end :| step@.
-          :| Int
-  -- | Single index @I index@.
-  | I Int
-  -- | Full slice, analogous to NumPy @:@.
-  | A
-  -- | Insert new dim, analogous to NumPy @None@.
-  | None
-  -- | Ellipses, analogous to NumPy @...@.
-  | Ell
-
--- | Slice indexer data type.
-type Slices = [Slice]
-
--- | Advanced indexer data type.
-type TensorIndex = [Tensor CInt]
-
-
--- instance Num (Tensor CFloat) where
---   (+) = performWithBroadcasting (+)
---   (-) = performWithBroadcasting (-)
---   (*) = performWithBroadcasting (*)
---   abs = Data.Tensor.Tensor.map abs
---   signum = Data.Tensor.Tensor.map signum
---   fromInteger = single . fromInteger
---   {-# INLINE (+) #-}
---   {-# INLINE (-) #-}
---   {-# INLINE (*) #-}
---   {-# INLINE abs #-}
---   {-# INLINE signum #-}
---   {-# INLINE fromInteger #-}
-
--- instance (Storable t, Fractional t) => Fractional (Tensor t) where
---   (/) = performWithBroadcasting (/)
---   fromRational = single . fromRational
---   {-# INLINE (/) #-}
---   {-# INLINE fromRational #-}
-
--- instance (Storable t, Floating t) => Floating (Tensor t) where
---   pi = single pi
---   exp = Data.Tensor.Tensor.map exp
---   log = Data.Tensor.Tensor.map log
---   sin = Data.Tensor.Tensor.map sin
---   cos = Data.Tensor.Tensor.map cos
---   asin = Data.Tensor.Tensor.map asin
---   acos = Data.Tensor.Tensor.map acos
---   atan = Data.Tensor.Tensor.map atan
---   sinh = Data.Tensor.Tensor.map sinh
---   cosh = Data.Tensor.Tensor.map cosh
---   asinh = Data.Tensor.Tensor.map asinh
---   acosh = Data.Tensor.Tensor.map acosh
---   atanh = Data.Tensor.Tensor.map atanh
---   {-# INLINE pi #-}
---   {-# INLINE exp #-}
---   {-# INLINE log #-}
---   {-# INLINE sin #-}
---   {-# INLINE cos #-}
---   {-# INLINE asin #-}
---   {-# INLINE acos #-}
---   {-# INLINE atan #-}
---   {-# INLINE sinh #-}
---   {-# INLINE cosh #-}
---   {-# INLINE asinh #-}
---   {-# INLINE acosh #-}
---   {-# INLINE atanh #-}
 
 -- | Generate a tensor from a generator function.
 --
@@ -119,7 +37,6 @@ tensor shape builder =
   case V.generate (fromIntegral $ totalElems shape) builder of {dat ->
     Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
   }
-
 
 -- | Return a new tensor filled with @fillValue@.
 --
@@ -136,47 +53,17 @@ full shape fillValue =
 zeros :: (Storable t, Num t) => Index -> Tensor t
 zeros shape = full shape 0
 
-
 -- | Return a new tensor filled with ones.
 --
 --   Signature: @shape -> tensor@
 ones :: (Storable t, Num t) => Index -> Tensor t
 ones shape = full shape 1
 
-
 -- | Return a new tensor of shape [1] with a single value.
 --
 --   Signature: @value -> tensor@
 single :: (Storable t, Num t) => t -> Tensor t
 single = full $ V.singleton 1
-
--- | Return a 2-D float tensor with ones
---   on the diagonal and zeros elsewhere.
---
---   @diagonalIndex@ 0 refers to the main diagonal,
---   a positive value refers to an upper diagonal,
---   and a negative value to a lower diagonal.
---
---   Signature: @rows -> columns -> diagonalIndex@
-eyeF :: CInt -> CInt -> CInt -> Tensor CFloat
-eyeF rows columns diagonalIndex =
-  Tensor (V.fromList [rows, columns])
-  (V.fromList [columns * sizeOfCFloat, sizeOfCFloat]) 0
-  $ unsafePerformIO
-  $ do
-    mutableData <- VM.new $ fromIntegral $ rows * columns
-    VM.unsafeWith mutableData (
-      \ mutableDataPtr ->
-        [CU.exp| void {
-          eye_f(
-            $(int rows),
-            $(int columns),
-            $(int diagonalIndex),
-            $(float *mutableDataPtr)
-          )
-        } |]
-      )
-    V.unsafeFreeze mutableData
 
 -- randn :: (Storable t, RandomGen g, Random t, Floating t) =>
 --   Index -> g -> (Tensor t, g)
@@ -190,18 +77,6 @@ eyeF rows columns diagonalIndex =
 --       let (randomValue, newG) = normal g in
 --         go (count - 1) (randomValue : xs) newG
 --     randomVector = fromList randomList
-
--- | Return evenly spaced float values within a given interval.
---
---   Example: @arange 0 3 1 = tensor([0, 1, 2])@
---
---   Signature: @low -> high -> step -> tensor@
-arangeF :: CFloat -> CFloat -> CFloat -> Tensor CFloat
-arangeF low high step =
-  tensor (V.singleton $ floor $ (high - low) / step) (
-    \ fIndex ->
-      low + step * fromIntegral fIndex
-  )
 
 
 -- elementwise :: (Storable a, Storable b, Storable c) =>
@@ -366,10 +241,10 @@ copy :: (Storable t) => Tensor t -> Tensor t
 copy (Tensor shape stride offset dat) =
   case sizeOfElem dat of {elemSize ->
   case V.unsafeCast dat of {dataCChar ->
+  case computeStride elemSize shape of {contiguousStride ->
     -- If tensor is not contiguous, deep copy
-    if computeStride elemSize shape /= stride then
-      Tensor shape
-      (computeStride elemSize shape) 0
+    if contiguousStride /= stride then
+      Tensor shape contiguousStride 0
       $ unsafePerformIO
       $ do
         mutableData <- VM.new $ fromIntegral $ totalElems shape
@@ -379,6 +254,7 @@ copy (Tensor shape stride offset dat) =
               $vec-len:stride,
               $vec-ptr:(int *shape),
               $vec-ptr:(int *stride),
+              $vec-ptr:(int *contiguousStride),
               $(int offset),
               $(int elemSize),
               $vec-ptr:(char *dataCChar),
@@ -393,7 +269,7 @@ copy (Tensor shape stride offset dat) =
         $ V.unsafeCast
         $ V.slice (fromIntegral offset)
           (fromIntegral $ totalElems shape * elemSize) dataCChar
-  }}
+  }}}
 
 -- | Return a tensor with last 2 axes transposed.
 --
@@ -441,35 +317,18 @@ foldr' f accum x =
 
 -- | Sum elements of a tensor.
 --
---   Signature: @function -> tensor -> sum@
-sum :: (Storable t, Num t) => Tensor t -> t
-sum x =
-  case copy x of {(Tensor shape stride offset dat) ->
-    fst $ V.foldl' kahanSum (0, 0) dat
-      where
-        kahanSum (sum, c) item =
-          case item - c of {y ->
-          case sum + y of {t ->
-            (t, (t - sum) - y)
-          }}
-  }
-
--- | Sum elements of a float tensor more efficiently.
---
---   Signature: @function -> tensor -> sum@
-sumF :: Tensor CFloat -> CFloat
-sumF (Tensor shape stride offset dat) =
-  case V.unsafeCast dat of {dataCChar ->
-    [CU.pure| float {
-      sum_f(
-        $vec-len:stride,
-        $vec-ptr:(int *shape),
-        $vec-ptr:(int *stride),
-        $(int offset),
-        $vec-ptr:(char *dataCChar)
-      )
-    } |]
-  }
+--   Signature: @tensor -> sum@
+-- sum :: (Storable t, Num t) => Tensor t -> t
+-- sum x =
+--   case copy x of {(Tensor shape stride offset dat) ->
+--     fst $ V.foldl' kahanSum (0, 0) dat
+--       where
+--         kahanSum (sum, c) item =
+--           case item - c of {y ->
+--           case sum + y of {t ->
+--             (t, (t - sum) - y)
+--           }}
+--   }
 
 -- sumBabushka :: (Storable t, Num t, Ord t) => Tensor t -> t
 -- sumBabushka (Tensor _ dat) =
@@ -485,8 +344,8 @@ sumF (Tensor shape stride offset dat) =
 --             t = item + y in
 --           (t, (t - item) - y)
 
-mean :: (Storable t, Fractional t) => Tensor t -> t
-mean x = Data.Tensor.Tensor.sum x / fromIntegral (numel x)
+-- mean :: (Storable t, FractionalTensor t) => Tensor t -> t
+-- mean x = sum x / fromIntegral (numel x)
 
 -- sumAlongDim :: (Storable t, Num t) =>
 --   Tensor t -> Int -> Tensor t
@@ -590,9 +449,7 @@ swapDims x@(Tensor shape stride offset dat) i j =
 -- {-# INLINE zeros #-}
 -- {-# INLINE ones #-}
 -- {-# INLINE single #-}
-{-# INLINE eyeF #-}
 -- {-# INLINE randn #-}
--- {-# INLINE arangeF #-}
 
 -- {-# INLINE elementwise #-}
 -- {-# INLINE performWithBroadcasting #-}
@@ -611,8 +468,6 @@ swapDims x@(Tensor shape stride offset dat) i j =
 {-# INLINE map #-}
 {-# INLINE foldl' #-}
 {-# INLINE foldr' #-}
-{-# INLINE sum #-}
-{-# INLINE sumF #-}
 -- {-# INLINE sumBabushka #-}
 -- {-# INLINE mean #-}
 -- {-# INLINE sumAlongDim #-}

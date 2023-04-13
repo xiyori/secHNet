@@ -22,14 +22,6 @@ get_elem(
 //     int *index
 // );
 
-void
-eye_f (
-    int rows,
-    int columns,
-    int k,
-    float *dat
-);
-
 int
 total_elems (
     int n_dims,
@@ -41,17 +33,9 @@ copy (
     int n_dims,
     int *shape,
     int *stride,
+    int *contiguous_stride,
     int offset,
     int elem_size,
     char *datFrom,
     char *datTo
-);
-
-float
-sum_f (
-    int n_dims,
-    int *shape,
-    int *stride,
-    int offset,
-    char *dat
 );
