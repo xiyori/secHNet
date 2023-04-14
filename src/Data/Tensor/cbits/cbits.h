@@ -36,6 +36,6 @@ copy (
     int *contiguous_stride,
     int offset,
     int elem_size,
-    char *datFrom,
-    char *datTo
+    char *dat_from,
+    char *dat_to
 );

@@ -68,8 +68,8 @@ copy (
     int *contiguous_stride,
     int offset,
     int elem_size,
-    char *datFrom,
-    char *datTo)
+    char *dat_from,
+    char *dat_to)
 {
     int last_dim = 1;
     for (int dim = n_dims - 1; dim >= -1; --dim) {
@@ -80,14 +80,13 @@ copy (
         }
         last_dim *= shape[dim];
     }
-    char *dataFrom0 = datFrom + offset;
     int *index = calloc(n_dims, sizeof(int));
     int numel = total_elems(n_dims, shape);
-    int f_index = 0;
+    int f_index = offset;
     for (int i = 0; i < numel; ++i) {
         memcpy(
-            datTo + i * elem_size,
-            datFrom + f_index,
+            dat_to + i * elem_size,
+            dat_from + f_index,
             elem_size
         );
         for (int dim = n_dims - 1; dim >= 0; --dim) {

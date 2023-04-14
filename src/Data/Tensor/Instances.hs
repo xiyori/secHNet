@@ -6,9 +6,10 @@ import Data.Tensor.Functional as T
 
 
 instance NumTensor t => Num (Tensor t) where
-  (+) = numTPlus
-  (-) = numTMinus
+  (+) = numTAdd
+  (-) = numTSub
   (*) = numTMult
+  negate = numTNegate
   abs = numTAbs
   signum = numTSignum
   fromInteger = single . fromInteger

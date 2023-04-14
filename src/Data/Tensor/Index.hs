@@ -27,7 +27,7 @@ computeStride sizeOfElem shape =
 
 -- | Parse negative index value.
 --
---   Signature: @dim -> i -> nI@
+--   Signature: @dim -> i -> normI@
 normalizeItem :: (Num t, Ord t) => t -> t -> t
 normalizeItem dim i =
   if i < 0 then
@@ -36,7 +36,7 @@ normalizeItem dim i =
 
 -- | Parse negative index values.
 --
---   Signature: @shape -> index -> nIndex@
+--   Signature: @shape -> index -> normIndex@
 normalizeIndex :: Index -> Index -> Index
 normalizeIndex = V.zipWith normalizeItem
 
@@ -56,18 +56,27 @@ validateIndex shape index
   | V.any (< 0) index                 = False
   | otherwise                         = True
 
--- | Determine if all elements in a list are equal.
+-- | Determine if two shapes can be broadcasted.
 --
---   Signature: @list -> areEqual@
+--   Signature: @shape -> shape -> canBroadcast@
+verifyBroadcastable :: Index -> Index -> Bool
+verifyBroadcastable shape1 shape2 =
+  V.and (
+    V.zipWith (
+      \ dim1 dim2 -> dim1 == dim2 || dim1 == 1 || dim2 == 1
+    ) (V.reverse shape1) (V.reverse shape2)
+  )
+
+-- | Determine if all elements in a list are equal.
 allEqual :: Eq a => [a] -> Bool
 allEqual xs = all (== head xs) $ tail xs
 
 -- | Swap index dimensions.
 --
---   Signature: @index -> i -> j -> swappedIndex@
+--   Signature: @index -> dim1 -> dim2 -> swappedIndex@
 swapElementsAt :: Index -> Int -> Int -> Index
-swapElementsAt index i j =
-  index // [(i, index ! j), (j, index ! i)]
+swapElementsAt index dim1 dim2 =
+  index // [(dim1, index ! dim2), (dim2, index ! dim1)]
 
 -- | Generate all indices between low and high (inclusive).
 -- indexRange :: Index -> Index -> [Index]
@@ -94,9 +103,11 @@ swapElementsAt index i j =
 -- indexRange0 :: Index -> [Index]
 -- indexRange0 high = indexRange (map (const 1) high) high
 
+{-# INLINE computeStride #-}
 {-# INLINE normalizeItem #-}
 {-# INLINE normalizeIndex #-}
-{-# INLINE computeStride #-}
 {-# INLINE totalElems #-}
 {-# INLINE validateIndex #-}
+{-# INLINE verifyBroadcastable #-}
 {-# INLINE allEqual #-}
+{-# INLINE swapElementsAt #-}

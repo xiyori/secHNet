@@ -7,7 +7,7 @@ module Data.Layers.Layer where
 
 import Control.Applicative(liftA2)
 import System.Random
-import Data.Tensor
+import Data.Tensor.Tensor
 
 data Params t = Flat [t] | Nested [Params t]
 instance Functor Params where

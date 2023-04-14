@@ -48,7 +48,7 @@ class (Storable t, Num t) => NumTensor t where
   --   a positive value refers to an upper diagonal,
   --   and a negative value to a lower diagonal.
   --
-  --   Signature: @rows -> columns -> diagonalIndex@
+  --   Signature: @rows -> columns -> diagonalIndex -> tensor@
   eye:: CInt -> CInt -> CInt -> Tensor t
 
   -- | Return evenly spaced values within a given interval.
@@ -59,13 +59,12 @@ class (Storable t, Num t) => NumTensor t where
   arange:: t -> t -> t -> Tensor t
 
   -- | Sum elements of a tensor.
-  --
-  --   Signature: @function -> tensor -> sum@
   sum:: Tensor t -> t
 
-  numTPlus :: Tensor t -> Tensor t -> Tensor t
-  numTMinus :: Tensor t -> Tensor t -> Tensor t
+  numTAdd :: Tensor t -> Tensor t -> Tensor t
+  numTSub :: Tensor t -> Tensor t -> Tensor t
   numTMult :: Tensor t -> Tensor t -> Tensor t
+  numTNegate :: Tensor t -> Tensor t
   numTAbs :: Tensor t -> Tensor t
   numTSignum :: Tensor t -> Tensor t
 

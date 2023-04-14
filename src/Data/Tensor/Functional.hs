@@ -1,6 +1,4 @@
 {-# LANGUAGE InstanceSigs #-}
--- {-# LANGUAGE FlexibleInstances #-}
--- {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -15,7 +13,7 @@ import System.Random
 import Data.Random.Normal
 import Data.Tensor.Index
 import Data.Tensor.Size
-import Data.Tensor.Definitions
+import Data.Tensor.Definitions as T
 
 import System.IO.Unsafe
 import Foreign
@@ -32,38 +30,42 @@ C.include "cbits/cbits.h"
 -- | Generate a tensor from a generator function.
 --
 --   Signature: @shape -> generator -> tensor@
-tensor :: Storable t => Index -> (Int -> t) -> Tensor t
+tensor :: Storable t => [CInt] -> (Int -> t) -> Tensor t
 tensor shape builder =
+  case V.fromList shape of {shape ->
   case V.generate (fromIntegral $ totalElems shape) builder of {dat ->
     Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
-  }
+  }}
 
 -- | Return a new tensor filled with @fillValue@.
 --
 --   Signature: @shape -> fillValue -> tensor@
-full :: Storable t => Index -> t -> Tensor t
+full :: Storable t => [CInt] -> t -> Tensor t
 full shape fillValue =
+  case V.fromList shape of {shape ->
   case V.replicate (fromIntegral $ totalElems shape) fillValue of {dat ->
     Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
-  }
+  }}
 
 -- | Return a new tensor filled with zeros.
 --
 --   Signature: @shape -> tensor@
-zeros :: (Storable t, Num t) => Index -> Tensor t
+zeros :: (Storable t, Num t) => [CInt] -> Tensor t
 zeros shape = full shape 0
 
 -- | Return a new tensor filled with ones.
 --
 --   Signature: @shape -> tensor@
-ones :: (Storable t, Num t) => Index -> Tensor t
+ones :: (Storable t, Num t) => [CInt] -> Tensor t
 ones shape = full shape 1
 
+-- | Return a new scalar tensor with a single value.
+scalar :: (Storable t, Num t) => t -> Tensor t
+scalar = full []
+
 -- | Return a new tensor of shape [1] with a single value.
---
---   Signature: @value -> tensor@
 single :: (Storable t, Num t) => t -> Tensor t
-single = full $ V.singleton 1
+single = full [1]
 
 -- randn :: (Storable t, RandomGen g, Random t, Floating t) =>
 --   Index -> g -> (Tensor t, g)
@@ -79,53 +81,83 @@ single = full $ V.singleton 1
 --     randomVector = fromList randomList
 
 
--- elementwise :: (Storable a, Storable b, Storable c) =>
---   (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
--- elementwise f (Tensor shape dat1) (Tensor _ dat2) =
---   Tensor shape $ V.zipWith f dat1 dat2
+-- | Perform elementwise operation without cheking
+--   for validity of arguments.
+--
+--   This function is not safe to use,
+--   consider using @elementwise@ instead.
+--
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
+unsafeElementwise :: (Storable a, Storable b, Storable c) =>
+  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
+unsafeElementwise f x1 x2 =
+  case copy x1 of {(Tensor shape stride offset dat1) ->
+  case copy x2 of {(Tensor _ _ _ dat2) ->
+    Tensor shape stride offset
+    $ V.zipWith f dat1 dat2
+  }}
 
--- performWithBroadcasting :: (Storable a, Storable b, Storable c) =>
---   (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
--- performWithBroadcasting f x1@(Tensor shape1 _) x2@(Tensor shape2 _)
---   | V.head shape1 == 1 && V.length shape1 == 1 =
---     Data.Tensor.map (f $ item x1) x2
---   | V.head shape2 == 1 && V.length shape2 == 1 =
---     Data.Tensor.map (flip f $ item x2) x1
---   | otherwise =
---     uncurry (elementwise f) $ broadcast x1 x2
+-- | Perform elementwise operation with broadcasting.
+--
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
+elementwise :: (Storable a, Storable b, Storable c) =>
+  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
+elementwise f x1@(Tensor shape1 _ _ _) x2@(Tensor shape2 _ _ _)
+  | totalElems shape1 == 1 =
+    Data.Tensor.Functional.map (f $ item x1) x2
+  | totalElems shape2 == 1 =
+    Data.Tensor.Functional.map (flip f $ item x2) x1
+  | otherwise =
+    uncurry (unsafeElementwise f) $ broadcast x1 x2
 
--- verifyBroadcastable :: (Storable a, Storable b) =>
---   Tensor a -> Tensor b -> Bool
--- verifyBroadcastable (Tensor shape1 _) (Tensor shape2 _) =
---   V.length shape1 == V.length shape2
---   && V.and (
---     V.zipWith (
---       \ dim1 dim2 -> dim1 == dim2 || dim1 == 1 || dim2 == 1
---     ) shape1 shape2
---   )
-
--- broadcast :: (Storable a, Storable b) =>
---   Tensor a -> Tensor b -> (Tensor a, Tensor b)
--- broadcast x1@(Tensor shape1 _) x2@(Tensor shape2 _) =
-  -- | verifyBroadcastable x1 x2 =
-  --   (repeatAlongDims x1 dims1 times1,
-  --    repeatAlongDims x2 dims2 times2)
-  -- | otherwise =
-  --   error
-  --   $ "tensors "
-  --   ++ show shape1
-  --   ++ " "
-  --   ++ show shape2
-  --   ++ " can not be broadcasted"
-  -- where
-  --   zipped = V.zip3 (fromList [0 .. V.length shape1 - 1]) shape1 shape2
-  --   (dims1, times1) = V.foldr addDim ([], []) zipped
-  --   (dims2, times2) = V.foldr (addDim . flipDims) ([], []) zipped
-  --   addDim (i, dim1, dim2) accum@(accumDims, accumTimes) =
-  --     if dim1 /= dim2 && dim1 == 1 then
-  --       (i : accumDims, dim2 : accumTimes)
-  --     else accum
-  --   flipDims (i, dim1, dim2) = (i, dim2, dim1)
+-- | Broadcast tensors without copying.
+broadcast :: (Storable a, Storable b) =>
+  Tensor a -> Tensor b -> (Tensor a, Tensor b)
+broadcast (Tensor shape1 stride1 offset1 dat1)
+          (Tensor shape2 stride2 offset2 dat2)
+  | verifyBroadcastable shape1 shape2 =
+    case V.length shape1 of {nDims1 ->
+    case V.length shape2 of {nDims2 ->
+    case (
+      V.concat [V.take (nDims2 - nDims1) shape2, shape1],
+      V.concat [V.take (nDims1 - nDims2) shape1, shape2],
+      V.concat [V.replicate (nDims2 - nDims1) 0, stride1],
+      V.concat [V.replicate (nDims1 - nDims2) 0, stride2]
+    ) of {(shape1, shape2, stride1, stride2) ->
+    case V.zipWith (
+      \ dim1 dim2 ->
+        if dim1 == 1 then
+          dim2
+        else dim1
+    ) shape1 shape2 of {newShape ->
+      (
+        Tensor newShape
+        (V.zipWith (
+          \ dim stride ->
+            if dim == 1 then
+              0
+            else stride
+        ) shape1 stride1) offset1 dat1,
+        Tensor newShape
+        (V.zipWith (
+          \ dim stride ->
+            if dim == 1 then
+              0
+            else stride
+        ) shape2 stride2) offset2 dat2
+      )
+    }}}}
+  | otherwise =
+    error
+    $ "tensors of shapes "
+    ++ show shape1
+    ++ ", "
+    ++ show shape2
+    ++ " can not be broadcasted"
 
 -- dot :: Num t => Tensor t -> Tensor t -> Tensor t
 -- dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
@@ -143,15 +175,13 @@ single = full $ V.singleton 1
 --
 --   This function is not safe to use,
 --   consider using @(!)@ operator instead.
---
---   Signature: @tensor -> index -> elem@
 unsafeGetElem :: Storable t => Tensor t -> Index -> t
-unsafeGetElem (Tensor _ stride offset dat) index =
+unsafeGetElem (Tensor shape stride offset dat) index =
   case V.unsafeCast dat of {dataCChar ->
     unsafeDupablePerformIO
     $ [CU.exp| char * {
         get_elem(
-          $vec-len:stride,
+          $vec-len:shape,
           $vec-ptr:(int *stride),
           $(int offset),
           $vec-ptr:(char *dataCChar),
@@ -161,13 +191,11 @@ unsafeGetElem (Tensor _ stride offset dat) index =
   }
 
 -- | Get element of a tensor.
---
---   Signature: @tensor -> index -> elem@
 (!) :: Storable t => Tensor t -> [CInt] -> t
 (!) x@(Tensor shape _ _ _) index =
-  case normalizeIndex shape $ V.fromList index of {nIndex ->
-    if validateIndex shape nIndex then
-      unsafeGetElem x nIndex
+  case normalizeIndex shape $ V.fromList index of {normIndex ->
+    if validateIndex shape normIndex then
+      unsafeGetElem x normIndex
     else
       error
       $ "incorrect index "
@@ -215,28 +243,26 @@ unsafeGetElem (Tensor _ stride offset dat) index =
 -- (!.) :: (Storable t) => Tensor t -> TensorIndex -> Tensor t
 -- (!.) = advancedIndex
 
--- | Return the element of a @single@ tensor.
---
---   Signature: @tensor -> elem@
+-- | Return the value of a tensor with one element.
 item :: (Storable t) => Tensor t -> t
 item x@(Tensor shape _ _ _)
-  | V.length shape == 1 && V.head shape == 1 =
-    unsafeGetElem x $ V.singleton 0
+  | totalElems shape == 1 =
+      unsafeGetElem x $ V.singleton 0
   | otherwise =
     error
-    $ "cannot get item from tensor with shape "
+    $ "cannot get item from tensor of shape "
     ++ show shape
 
 
 -- | Total number of elements in a tensor.
---
---   Signature: @tensor -> numel@
 numel :: (Storable t) => Tensor t -> CInt
 numel (Tensor shape _ _ _) = totalElems shape
 
+-- | Take a mean of elements in a tensor.
+mean :: (Storable t, FractionalTensor t) => Tensor t -> t
+mean x = T.sum x / fromIntegral (numel x)
+
 -- | Return a contiguous copy of a tensor.
---
---   Signature: @tensor -> copiedTensor@
 copy :: (Storable t) => Tensor t -> Tensor t
 copy (Tensor shape stride offset dat) =
   case sizeOfElem dat of {elemSize ->
@@ -251,7 +277,7 @@ copy (Tensor shape stride offset dat) =
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             copy(
-              $vec-len:stride,
+              $vec-len:shape,
               $vec-ptr:(int *shape),
               $vec-ptr:(int *stride),
               $vec-ptr:(int *contiguousStride),
@@ -272,14 +298,10 @@ copy (Tensor shape stride offset dat) =
   }}}
 
 -- | Return a tensor with last 2 axes transposed.
---
---   Signature: @tensor -> tensor@
 transpose :: Storable t => Tensor t -> Tensor t
 transpose x = swapDims x (-1) (-2)
 
 -- | Return a copy of the tensor collapsed into one dimension.
---
---   Signature: @tensor -> tensor@
 flatten :: (Storable t) => Tensor t -> Tensor t
 flatten x =
   case copy x of {(Tensor shape stride offset dat) ->
@@ -289,7 +311,9 @@ flatten x =
 
 -- | Map a function over a tensor.
 --
---   Signature: @function -> tensor -> tensor@
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
 map :: (Storable a, Storable b) => (a -> b) -> Tensor a -> Tensor b
 map f x =
   case copy x of {(Tensor shape stride offset dat) ->
@@ -299,7 +323,9 @@ map f x =
 
 -- | Left fold with strict accumulator.
 --
---   Signature: @function -> accum -> tensor -> result@
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
 foldl' :: Storable b => (a -> b -> a) -> a -> Tensor b -> a
 foldl' f accum x =
   case copy x of {(Tensor shape stride offset dat) ->
@@ -308,44 +334,14 @@ foldl' f accum x =
 
 -- | Right fold with strict accumulator.
 --
---   Signature: @function -> accum -> tensor -> result@
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
 foldr' :: Storable b => (b -> a -> a) -> a -> Tensor b -> a
 foldr' f accum x =
   case copy x of {(Tensor shape stride offset dat) ->
     V.foldr' f accum dat
   }
-
--- | Sum elements of a tensor.
---
---   Signature: @tensor -> sum@
--- sum :: (Storable t, Num t) => Tensor t -> t
--- sum x =
---   case copy x of {(Tensor shape stride offset dat) ->
---     fst $ V.foldl' kahanSum (0, 0) dat
---       where
---         kahanSum (sum, c) item =
---           case item - c of {y ->
---           case sum + y of {t ->
---             (t, (t - sum) - y)
---           }}
---   }
-
--- sumBabushka :: (Storable t, Num t, Ord t) => Tensor t -> t
--- sumBabushka (Tensor _ dat) =
---   fst $ V.foldl' kahanBabushkaSum (0, 0) dat
---   where
---     kahanBabushkaSum (sum, c) item =
---       if abs sum >= abs item then
---         let y = item - c
---             t = sum + y in
---           (t, (t - sum) - y)
---       else
---         let y = sum - c
---             t = item + y in
---           (t, (t - item) - y)
-
--- mean :: (Storable t, FractionalTensor t) => Tensor t -> t
--- mean x = sum x / fromIntegral (numel x)
 
 -- sumAlongDim :: (Storable t, Num t) =>
 --   Tensor t -> Int -> Tensor t
@@ -388,16 +384,31 @@ foldr' f accum x =
 --         V.drop (nDim + 1) shape
 --       ]
 
--- insertDim :: (Storable t) => Tensor t -> Int -> Tensor t
--- insertDim (Tensor shape dat) dim =
---   Tensor newShape dat
---   where
---     nDim = normalizeItem (V.length shape) dim
---     newShape = V.concat [
---         V.take nDim shape,
---         singleton 1,
---         V.drop nDim shape
---       ]
+-- | Insert a new dim into a tensor.
+--
+--   Signature: @tensor -> dim -> tensor@
+insertDim :: (Storable t) => Tensor t -> Int -> Tensor t
+insertDim (Tensor shape stride offset dat) dim =
+  case V.length shape of {nDims ->
+  case normalizeItem nDims dim of {normDim ->
+    if 0 <= normDim && normDim < nDims then
+      Tensor
+      (V.concat [
+          V.take normDim shape,
+          V.singleton 1,
+          V.drop normDim shape])
+      (V.concat [
+          V.take normDim stride,
+          V.singleton 0,
+          V.drop normDim stride])
+      offset dat
+    else
+      error
+      $ "cannot insert dim "
+      ++ show dim
+      ++ " in tensor of shape "
+      ++ show shape
+  }}
 
 -- -- | tensor -> dim -> times
 -- repeatAlongDim :: (Storable t) => Tensor t -> Int -> Int -> Tensor t
@@ -413,34 +424,28 @@ foldr' f accum x =
 --     -- debugPrint x =
 --     --   unsafePerformIO $ print x >> return x
 
--- -- | tensor -> dims -> times
--- repeatAlongDims :: (Storable t) =>
---   Tensor t -> [Int] -> [Int] -> Tensor t
--- repeatAlongDims x dims timess =
---   foldl' (
---     \ accum (dim, times) ->
---       repeatAlongDim accum dim times
---   ) x $ zip dims timess
-
 -- | Interchange two dims of a tensor.
 --
---   Signature: @tensor -> i -> j -> swappedTensor@
+--   Signature: @tensor -> dim1 -> dim2 -> tensor@
 swapDims :: (Storable t) =>
   Tensor t -> Int -> Int -> Tensor t
-swapDims x@(Tensor shape stride offset dat) i j =
+swapDims x@(Tensor shape stride offset dat) dim1 dim2 =
   case V.length shape of {nDims ->
-  case normalizeItem nDims i of {nI ->
-  case normalizeItem nDims j of {nJ ->
-    if 0 <= nI && nI < nDims && 0 <= nJ && nJ < nDims then
-      Tensor (swapElementsAt shape nI nJ) (swapElementsAt stride nI nJ)
+  case normalizeItem nDims dim1 of {normDim1 ->
+  case normalizeItem nDims dim2 of {normDim2 ->
+    if 0 <= normDim1 && normDim1 < nDims &&
+       0 <= normDim2 && normDim2 < nDims then
+      Tensor
+      (swapElementsAt shape normDim1 normDim2)
+      (swapElementsAt stride normDim1 normDim2)
       offset dat
     else
       error
       $ "cannot swap dims "
-      ++ show i
+      ++ show dim1
       ++ ", "
-      ++ show j
-      ++ " of tensor with shape "
+      ++ show dim2
+      ++ " of tensor of shape "
       ++ show shape
   }}}
 
@@ -448,13 +453,13 @@ swapDims x@(Tensor shape stride offset dat) i j =
 {-# INLINE full #-}
 -- {-# INLINE zeros #-}
 -- {-# INLINE ones #-}
+-- {-# INLINE scalar #-}
 -- {-# INLINE single #-}
 -- {-# INLINE randn #-}
 
+{-# INLINE unsafeElementwise #-}
 -- {-# INLINE elementwise #-}
--- {-# INLINE performWithBroadcasting #-}
--- {-# INLINE verifyBroadcastable #-}
--- {-# INLINE broadcast #-}
+{-# INLINE broadcast #-}
 
 {-# INLINE unsafeGetElem #-}
 -- {-# INLINE slice #-}
@@ -468,11 +473,9 @@ swapDims x@(Tensor shape stride offset dat) i j =
 {-# INLINE map #-}
 {-# INLINE foldl' #-}
 {-# INLINE foldr' #-}
--- {-# INLINE sumBabushka #-}
 -- {-# INLINE mean #-}
 -- {-# INLINE sumAlongDim #-}
 -- {-# INLINE sumAlongDimKeepDims #-}
 -- {-# INLINE insertDim #-}
 -- {-# INLINE repeatAlongDim #-}
--- {-# INLINE repeatAlongDims #-}
 -- {-# INLINE swapDims #-}
