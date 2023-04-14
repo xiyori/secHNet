@@ -59,6 +59,12 @@ mult_f(
 );
 
 float
+div_f(
+    float arg1,
+    float arg2
+);
+
+float
 neg_f(
     float arg
 );

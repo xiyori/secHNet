@@ -237,3 +237,324 @@ instance NumTensor CFloat where
   {-# INLINE numTNegate #-}
   {-# INLINE numTAbs #-}
   {-# INLINE numTSignum #-}
+
+instance FractionalTensor CFloat where
+  fracTDiv :: Tensor CFloat -> Tensor CFloat -> Tensor CFloat
+  fracTDiv x1 x2 =
+    case broadcast x1 x2 of {(
+      Tensor shape stride1 offset1 dat1,
+      Tensor _ stride2 offset2 dat2
+    ) ->
+    case V.unsafeCast dat1 of {data1CChar ->
+    case V.unsafeCast dat2 of {data2CChar ->
+      Tensor shape (computeStride (sizeOfElem dat1) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            elementwise_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride1),
+              $(int offset1),
+              $vec-ptr:(char *data1CChar),
+              $vec-ptr:(int *stride2),
+              $(int offset2),
+              $vec-ptr:(char *data2CChar),
+              $vec-ptr:(char *mutableDataCChar),
+              div_f
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}}
+  {-# INLINE fracTDiv #-}
+
+instance FloatingTensor CFloat where
+  floatTExp :: Tensor CFloat -> Tensor CFloat
+  floatTExp (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              expf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTLog :: Tensor CFloat -> Tensor CFloat
+  floatTLog (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              logf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTSin :: Tensor CFloat -> Tensor CFloat
+  floatTSin (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              sinf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTCos :: Tensor CFloat -> Tensor CFloat
+  floatTCos (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              cosf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTAsin :: Tensor CFloat -> Tensor CFloat
+  floatTAsin (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              asinf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTAcos :: Tensor CFloat -> Tensor CFloat
+  floatTAcos (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              acosf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTAtan :: Tensor CFloat -> Tensor CFloat
+  floatTAtan (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              atanf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTSinh :: Tensor CFloat -> Tensor CFloat
+  floatTSinh (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              sinhf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTCosh :: Tensor CFloat -> Tensor CFloat
+  floatTCosh (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              coshf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTAsinh :: Tensor CFloat -> Tensor CFloat
+  floatTAsinh (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              asinhf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTAcosh :: Tensor CFloat -> Tensor CFloat
+  floatTAcosh (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              acoshf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+
+  floatTAtanh :: Tensor CFloat -> Tensor CFloat
+  floatTAtanh (Tensor shape stride offset dat) =
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            map_f(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar),
+              atanhf
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }
+  {-# INLINE floatTExp #-}
+  {-# INLINE floatTLog #-}
+  {-# INLINE floatTSin #-}
+  {-# INLINE floatTCos #-}
+  {-# INLINE floatTAsin #-}
+  {-# INLINE floatTAcos #-}
+  {-# INLINE floatTAtan #-}
+  {-# INLINE floatTSinh #-}
+  {-# INLINE floatTCosh #-}
+  {-# INLINE floatTAsinh #-}
+  {-# INLINE floatTAcosh #-}
