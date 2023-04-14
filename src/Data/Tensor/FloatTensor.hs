@@ -34,22 +34,19 @@ instance NumTensor CFloat where
     $ unsafePerformIO
     $ do
       mutableData <- VM.new $ fromIntegral $ rows * columns
-      VM.unsafeWith mutableData (
-        \ mutableDataPtr ->
-          [CU.exp| void {
-            eye_f(
-              $(int rows),
-              $(int columns),
-              $(int diagonalIndex),
-              $(float *mutableDataPtr)
-            )
-          } |]
+      [CU.exp| void {
+        eye_f(
+          $(int rows),
+          $(int columns),
+          $(int diagonalIndex),
+          $vec-ptr:(float *mutableData)
         )
+      } |]
       V.unsafeFreeze mutableData
 
   arange :: CFloat -> CFloat -> CFloat -> Tensor CFloat
   arange low high step =
-    tensor [floor $ (high - low) / step] (
+    tensor (V.singleton $ floor $ (high - low) / step) (
       \ fIndex -> low + step * fromIntegral fIndex
     )
 

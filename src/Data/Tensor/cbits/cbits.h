@@ -33,9 +33,21 @@ copy (
     int n_dims,
     int *shape,
     int *stride,
-    int *contiguous_stride,
     int offset,
     int elem_size,
     char *dat_from,
     char *dat_to
+);
+
+int
+equal (
+    int n_dims,
+    int *shape,
+    int elem_size,
+    int *stride1,
+    int offset1,
+    char *dat1,
+    int *stride2,
+    int offset2,
+    char *dat2
 );

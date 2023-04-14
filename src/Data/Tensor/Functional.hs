@@ -5,6 +5,7 @@
 
 module Data.Tensor.Functional where
 
+import Control.Monad.IO.Class
 import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
@@ -27,92 +28,104 @@ C.context (C.baseCtx <> C.vecCtx)
 C.include "cbits/cbits.h"
 
 
+-- Construction
+-- ------------
+
 -- | Generate a tensor from a generator function.
 --
 --   Signature: @shape -> generator -> tensor@
-tensor :: Storable t => [CInt] -> (Int -> t) -> Tensor t
+tensor :: Storable t => Index -> (Int -> t) -> Tensor t
 tensor shape builder =
-  case V.fromList shape of {shape ->
   case V.generate (fromIntegral $ totalElems shape) builder of {dat ->
     Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
-  }}
+  }
 
 -- | Return a new tensor filled with @fillValue@.
 --
 --   Signature: @shape -> fillValue -> tensor@
-full :: Storable t => [CInt] -> t -> Tensor t
+full :: Storable t => Index -> t -> Tensor t
 full shape fillValue =
-  case V.fromList shape of {shape ->
   case V.replicate (fromIntegral $ totalElems shape) fillValue of {dat ->
     Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
-  }}
+  }
 
 -- | Return a new tensor filled with zeros.
 --
 --   Signature: @shape -> tensor@
-zeros :: (Storable t, Num t) => [CInt] -> Tensor t
+zeros :: (Storable t, Num t) => Index -> Tensor t
 zeros shape = full shape 0
 
 -- | Return a new tensor filled with ones.
 --
 --   Signature: @shape -> tensor@
-ones :: (Storable t, Num t) => [CInt] -> Tensor t
+ones :: (Storable t, Num t) => Index -> Tensor t
 ones shape = full shape 1
 
 -- | Return a new scalar tensor with a single value.
 scalar :: (Storable t, Num t) => t -> Tensor t
-scalar = full []
+scalar = full V.empty
 
 -- | Return a new tensor of shape [1] with a single value.
 single :: (Storable t, Num t) => t -> Tensor t
-single = full [1]
+single = full $ V.singleton 1
 
--- randn :: (Storable t, RandomGen g, Random t, Floating t) =>
---   Index -> g -> (Tensor t, g)
--- randn shape gen =
---   (Tensor shape randomVector, newGen)
---   where
---     n = countIndex shape
---     (randomList, newGen) = go n [] gen
---     go 0 xs g = (xs, g)
---     go count xs g =
---       let (randomValue, newG) = normal g in
---         go (count - 1) (randomValue : xs) newG
---     randomVector = fromList randomList
-
-
--- | Perform elementwise operation without cheking
---   for validity of arguments.
+-- | Return a new tensor filled with random values from
+--   standard normal distribution.
 --
---   This function is not safe to use,
---   consider using @elementwise@ instead.
---
---   /WARNING:/ This function involves copying and
---   can be less efficient than native tensor operations.
---   Consider using them if possible.
-unsafeElementwise :: (Storable a, Storable b, Storable c) =>
-  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
-unsafeElementwise f x1 x2 =
-  case copy x1 of {(Tensor shape stride offset dat1) ->
-  case copy x2 of {(Tensor _ _ _ dat2) ->
-    Tensor shape stride offset
-    $ V.zipWith f dat1 dat2
-  }}
+--   Signature: @shape -> gen -> (tensor, gen)@
+randn :: (Storable t, Random t, Floating t, RandomGen g) =>
+  Index -> g -> (Tensor t, g)
+randn shape gen =
+  case V.unfoldrExactN (fromIntegral $ totalElems shape)
+  normal gen of {dat ->
+    (Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat,
+     gen)
+  }
 
--- | Perform elementwise operation with broadcasting.
+-- | Return a new tensor filled with random values from
+--   standard normal distribution inside IO monad.
 --
---   /WARNING:/ This function involves copying and
---   can be less efficient than native tensor operations.
---   Consider using them if possible.
-elementwise :: (Storable a, Storable b, Storable c) =>
-  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
-elementwise f x1@(Tensor shape1 _ _ _) x2@(Tensor shape2 _ _ _)
-  | totalElems shape1 == 1 =
-    Data.Tensor.Functional.map (f $ item x1) x2
-  | totalElems shape2 == 1 =
-    Data.Tensor.Functional.map (flip f $ item x2) x1
-  | otherwise =
-    uncurry (unsafeElementwise f) $ broadcast x1 x2
+--   Signature: @shape -> tensor@
+randnM :: (Storable t, Random t, Floating t, MonadIO m) =>
+  Index -> m (Tensor t)
+randnM shape = do
+  dat <- V.replicateM (fromIntegral $ totalElems shape) (
+    getStdGen >>= (
+      \ gen ->
+        case normal gen of {(value, gen) ->
+          setStdGen gen >> return value
+        }
+    ))
+  return $ Tensor shape
+    (computeStride (sizeOfElem dat) shape) 0 dat
+
+-- | Generate a tensor from a generator function.
+--
+--   Signature: @tensor -> generator -> tensor@
+tensorLike :: (Storable a, Storable b) => Tensor a -> (Int -> b) -> Tensor b
+tensorLike (Tensor shape _ _ _) = tensor shape
+
+-- | Return a new tensor filled with @fillValue@.
+--
+--   Signature: @tensor -> fillValue -> tensor@
+fullLike :: (Storable a, Storable b) => Tensor a -> b -> Tensor b
+fullLike (Tensor shape _ _ _) = full shape
+
+-- | Return a new tensor filled with zeros.
+--
+--   Signature: @tensor -> tensor@
+zerosLike :: (Storable a, Storable b, Num b) => Tensor a -> Tensor b
+zerosLike (Tensor shape _ _ _) = full shape 0
+
+-- | Return a new tensor filled with ones.
+--
+--   Signature: @tensor -> tensor@
+onesLike :: (Storable a, Storable b, Num b) => Tensor a -> Tensor b
+onesLike (Tensor shape _ _ _) = full shape 1
+
+
+-- Binary operations
+-- -----------------
 
 -- | Broadcast tensors without copying.
 broadcast :: (Storable a, Storable b) =>
@@ -159,6 +172,39 @@ broadcast (Tensor shape1 stride1 offset1 dat1)
     ++ show shape2
     ++ " can not be broadcasted"
 
+-- | Perform elementwise operation without cheking
+--   for validity of arguments.
+--
+--   This function is not safe to use,
+--   consider using @elementwise@ instead.
+--
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
+unsafeElementwise :: (Storable a, Storable b, Storable c) =>
+  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
+unsafeElementwise f x1 x2 =
+  case copy x1 of {(Tensor shape stride offset dat1) ->
+  case copy x2 of {(Tensor _ _ _ dat2) ->
+    Tensor shape stride offset
+    $ V.zipWith f dat1 dat2
+  }}
+
+-- | Perform elementwise operation with broadcasting.
+--
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
+elementwise :: (Storable a, Storable b, Storable c) =>
+  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
+elementwise f x1@(Tensor shape1 _ _ _) x2@(Tensor shape2 _ _ _)
+  | totalElems shape1 == 1 =
+    Data.Tensor.Functional.map (f $ item x1) x2
+  | totalElems shape2 == 1 =
+    Data.Tensor.Functional.map (flip f $ item x2) x1
+  | otherwise =
+    uncurry (unsafeElementwise f) $ broadcast x1 x2
+
 -- dot :: Num t => Tensor t -> Tensor t -> Tensor t
 -- dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
 --   Tensor (mergeIndex arrayShape (matrixRows1, matrixCols2))
@@ -170,6 +216,38 @@ broadcast (Tensor shape1 stride1 offset1 dat1)
 -- | An infix synonym for dot.
 -- (@) :: Num t => Tensor t -> Tensor t -> Tensor t
 -- (@) = dot
+
+-- | True if two tensors have the same shape and elements, False otherwise.
+tensorEqual :: (Storable t) => Tensor t -> Tensor t -> Bool
+tensorEqual (Tensor shape stride1 offset1 dat1)
+            (Tensor shape2 stride2 offset2 dat2)
+  | shape == shape2 =
+    case sizeOfElem dat1 of {elemSize ->
+    case V.unsafeCast dat1 of {data1CChar ->
+    case V.unsafeCast dat2 of {data2CChar ->
+      toBool [CU.pure| int {
+        equal(
+          $vec-len:shape,
+          $vec-ptr:(int *shape),
+          $(int elemSize),
+          $vec-ptr:(int *stride1),
+          $(int offset1),
+          $vec-ptr:(char *data1CChar),
+          $vec-ptr:(int *stride2),
+          $(int offset2),
+          $vec-ptr:(char *data2CChar)
+        )
+      } |]
+    }}}
+  | otherwise = False
+
+-- Return (x1 == x2) element-wise.
+-- equal :: (Storable t) => Tensor t -> Tensor t -> Tensor CBool
+-- equal
+
+
+-- Indexing
+-- --------
 
 -- | Get element of a tensor without cheking for index validity.
 --
@@ -205,21 +283,10 @@ unsafeGetElem (Tensor shape stride offset dat) index =
   }
 
 -- slice :: (Storable t) => Tensor t -> Slices -> Tensor t
--- slice x@(Tensor shape _) slices =
---   tensor newShape (
---     \ index ->
---       x !? fromList (zipWith (!) expandedIndex $ toList index)
---   )
---   where
---     expandedIndex =
---       zipWith (
---         \ dim slice ->
---           if V.null slice then
---             fromList [0 .. dim - 1]
---           else slice
---       ) (toList shape) slices
---     newShape = fromList $ Prelude.map V.length expandedIndex
+-- slice x@(Tensor shape stride offset dat) slices =
+--   case To
 
+-- | An infix synonym for slice.
 -- (!:) :: (Storable t) => Tensor t -> Slices -> Tensor t
 -- (!:) = slice
 
@@ -254,6 +321,9 @@ item x@(Tensor shape _ _ _)
     ++ show shape
 
 
+-- Unary operations
+-- ----------------
+
 -- | Total number of elements in a tensor.
 numel :: (Storable t) => Tensor t -> CInt
 numel (Tensor shape _ _ _) = totalElems shape
@@ -280,7 +350,6 @@ copy (Tensor shape stride offset dat) =
               $vec-len:shape,
               $vec-ptr:(int *shape),
               $vec-ptr:(int *stride),
-              $vec-ptr:(int *contiguousStride),
               $(int offset),
               $(int elemSize),
               $vec-ptr:(char *dataCChar),
@@ -455,11 +524,14 @@ swapDims x@(Tensor shape stride offset dat) dim1 dim2 =
 -- {-# INLINE ones #-}
 -- {-# INLINE scalar #-}
 -- {-# INLINE single #-}
--- {-# INLINE randn #-}
+{-# INLINE randn #-}
+{-# INLINE randnM #-}
 
 {-# INLINE unsafeElementwise #-}
 -- {-# INLINE elementwise #-}
 {-# INLINE broadcast #-}
+-- {-# INLINE dot #-}
+{-# INLINE tensorEqual #-}
 
 {-# INLINE unsafeGetElem #-}
 -- {-# INLINE slice #-}

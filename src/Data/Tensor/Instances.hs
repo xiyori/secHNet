@@ -5,6 +5,9 @@ import Data.Tensor.Definitions
 import Data.Tensor.Functional as T
 
 
+instance Storable t => Eq (Tensor t) where
+  (==) = tensorEqual
+
 instance NumTensor t => Num (Tensor t) where
   (+) = numTAdd
   (-) = numTSub

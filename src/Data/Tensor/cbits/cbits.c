@@ -65,20 +65,17 @@ copy (
     int n_dims,
     int *shape,
     int *stride,
-    int *contiguous_stride,
     int offset,
     int elem_size,
     char *dat_from,
     char *dat_to)
 {
-    int last_dim = 1;
     for (int dim = n_dims - 1; dim >= -1; --dim) {
-        if (dim == -1 || stride[dim] != contiguous_stride[dim]) {
+        if (dim == -1 || stride[dim] != elem_size) {
             n_dims = dim + 1;
-            elem_size *= last_dim;
             break;
         }
-        last_dim *= shape[dim];
+        elem_size *= shape[dim];
     }
     int *index = calloc(n_dims, sizeof(int));
     int numel = total_elems(n_dims, shape);
@@ -101,4 +98,49 @@ copy (
         }
     }
     free(index);
+}
+
+int
+equal (
+    int n_dims,
+    int *shape,
+    int elem_size,
+    int *stride1,
+    int offset1,
+    char *dat1,
+    int *stride2,
+    int offset2,
+    char *dat2)
+{
+    for (int dim = n_dims - 1; dim >= -1; --dim) {
+        if (dim == -1 || stride1[dim] != elem_size ||
+                         stride2[dim] != elem_size) {
+            n_dims = dim + 1;
+            break;
+        }
+        elem_size *= shape[dim];
+    }
+    int *index = calloc(n_dims, sizeof(int));
+    int numel = total_elems(n_dims, shape);
+    int f_index1 = offset1;
+    int f_index2 = offset2;
+    for (int i = 0; i < numel; ++i) {
+        if (memcmp(dat1 + f_index1, dat2 + f_index2, elem_size)) {
+            return 0;
+        }
+        for (int dim = n_dims - 1; dim >= 0; --dim) {
+            index[dim] += 1;
+            f_index1 += stride1[dim];
+            f_index2 += stride2[dim];
+            if (index[dim] == shape[dim]) {
+                index[dim] = 0;
+                f_index1 -= stride1[dim] * shape[dim];
+                f_index2 -= stride2[dim] * shape[dim];
+            } else {
+                break;
+            }
+        }
+    }
+    free(index);
+    return 1;
 }
