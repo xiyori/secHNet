@@ -92,7 +92,17 @@ prop_transpose_id x = transpose (transpose x1) == x1
   where
     x1 = insertDim (insertDim x 0) 0
 
--- prop_flatten - need reshape
+prop_flatten_id :: Tensor CFloat -> Bool
+prop_flatten_id x = flatten x `view` shape x == x
+
+prop_view :: Tensor CFloat -> Bool
+prop_view x =
+  transpose (
+    (xT `view` V.singleton (totalElems $ shape x)) `view` shape xT
+  ) == x1
+  where
+    x1 = insertDim (insertDim x 0) 0
+    xT = transpose x1
 
 prop_insert_dim :: Index -> Bool
 prop_insert_dim shape = insertDim x 0 == zeros (V.concat [V.singleton 1, shape])

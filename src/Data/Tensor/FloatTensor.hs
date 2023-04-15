@@ -570,6 +570,7 @@ instance FloatingTensor CFloat where
         }
         V.unsafeFreeze mutableData
     }
+  {-# INLINE allCloseTol #-}
   {-# INLINE floatTExp #-}
   {-# INLINE floatTLog #-}
   {-# INLINE floatTSin #-}

@@ -379,6 +379,29 @@ flatten x =
       (V.singleton $ sizeOfElem dat) offset dat
   }
 
+-- | Give a new shape to a tensor without changing its data.
+--
+--   Signature: @tensor -> newShape -> tensor@
+view :: (Storable t) => Tensor t -> Index -> Tensor t
+view x@(Tensor shape stride offset dat) newShape
+  | totalElems shape == totalElems newShape =
+    case sizeOfElem dat of {elemSize ->
+    case computeStride elemSize shape of {contiguousStride ->
+    case computeStride elemSize newShape of {newStride ->
+      if stride == contiguousStride then
+        Tensor newShape newStride offset dat
+      else
+        case copy x of {(Tensor _ _ offset dat) ->
+          Tensor newShape newStride offset dat
+        }
+    }}}
+  | otherwise =
+    error
+    $ "cannot reshape tensor of shape "
+    ++ show shape
+    ++ " into shape "
+    ++ show newShape
+
 -- | Map a function over a tensor.
 --
 --   /WARNING:/ This function involves copying and

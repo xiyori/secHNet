@@ -16,7 +16,7 @@ data (Storable t) =>
     offset :: !CInt,
     -- | Internal data representation.
     tensorData :: !(Vector t)
-  } deriving Show
+  }
 
 -- | Slice data type.
 data Slice
@@ -76,7 +76,7 @@ class (Storable t, Fractional t, NumTensor t) => FractionalTensor t where
 class (Storable t, Floating t, FractionalTensor t) => FloatingTensor t where
   -- | Returns True if two arrays are element-wise equal within a tolerance.
   allCloseTol :: t -> t -> Tensor t -> Tensor t -> Bool
-  
+
   -- | Returns True if two arrays are element-wise equal within a default tolerance.
   allClose :: Tensor t -> Tensor t -> Bool
   allClose = allCloseTol 1e-05 1e-08
