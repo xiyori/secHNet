@@ -10,31 +10,13 @@ data (Storable t) =>
   Tensor t = Tensor {
     -- | Tensor shape.
     shape :: !Index,
-    -- | Tensor stride in bytes, analogous to NumPy array stride.
-    stride :: !Index,
+    -- | Data stride in bytes, analogous to NumPy array stride.
+    tensorStride :: !Index,
     -- | Data offset in bytes.
-    offset :: !CInt,
+    tensorOffset :: !CInt,
     -- | Internal data representation.
     tensorData :: !(Vector t)
   }
-
--- | Slice data type.
-data Slice
-  = Int -- | Slice @start :. end@.
-        :. Int
-  | Slice -- | Slice @start :. end :| step@.
-          :| Int
-  -- | Single index @I index@.
-  | I Int
-  -- | Full slice, analogous to NumPy @:@.
-  | A
-  -- | Insert new dim, analogous to NumPy @None@.
-  | None
-  -- | Ellipses, analogous to NumPy @...@.
-  | Ell
-
--- | Slice indexer data type.
-type Slices = [Slice]
 
 -- | Advanced indexer data type.
 type TensorIndex = [Tensor CInt]

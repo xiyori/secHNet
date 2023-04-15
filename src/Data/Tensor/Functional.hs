@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Data.Tensor.Functional where
 
@@ -133,20 +134,9 @@ broadcast :: (Storable a, Storable b) =>
 broadcast (Tensor shape1 stride1 offset1 dat1)
           (Tensor shape2 stride2 offset2 dat2)
   | verifyBroadcastable shape1 shape2 =
-    case V.length shape1 of {nDims1 ->
-    case V.length shape2 of {nDims2 ->
-    case (
-      V.concat [V.take (nDims2 - nDims1) shape2, shape1],
-      V.concat [V.take (nDims1 - nDims2) shape1, shape2],
-      V.concat [V.replicate (nDims2 - nDims1) 0, stride1],
-      V.concat [V.replicate (nDims1 - nDims2) 0, stride2]
-    ) of {(shape1, shape2, stride1, stride2) ->
-    case V.zipWith (
-      \ dim1 dim2 ->
-        if dim1 == 1 then
-          dim2
-        else dim1
-    ) shape1 shape2 of {newShape ->
+    case broadcastShapesStrides shape1 shape2 stride1 stride2
+    of {(shape1, shape2, stride1, stride2) ->
+    case broadcastedShape shape1 shape2 of {newShape ->
       (
         Tensor newShape
         (V.zipWith (
@@ -163,7 +153,7 @@ broadcast (Tensor shape1 stride1 offset1 dat1)
             else stride
         ) shape2 stride2) offset2 dat2
       )
-    }}}}
+    }}
   | otherwise =
     error
     $ "tensors of shapes "
@@ -283,13 +273,40 @@ unsafeGetElem (Tensor shape stride offset dat) index =
       ++ show shape
   }
 
--- slice :: (Storable t) => Tensor t -> Slices -> Tensor t
--- slice x@(Tensor shape stride offset dat) slices =
---   case To
+slice :: (Storable t) => Tensor t -> Slices -> Tensor t
+slice x@(Tensor shape stride offset dat) slices =
+  case parseSlices shape slices of {(dimsToInsert, slices) ->
+    insertDims (Tensor (V.fromList $ Prelude.map (
+      \ (start :. end :| step) -> (end - start) `div` step
+    ) $ filter (
+      \case
+        I _ -> False
+        _   -> True
+    ) slices)
+    (V.fromList $ Prelude.map (
+      \ (_ :. _ :| step, stride) ->
+        stride * step
+    ) $ filter (
+      \ (slice, stride) ->
+        case slice of
+          I _ -> False
+          _   -> True
+    ) $ zip slices $ V.toList stride)
+    ((+) offset $ Prelude.sum $ zipWith (
+      \ slice stride ->
+        case slice of
+          start :. end :| step ->
+            if step > 0 then
+              start * stride
+            else end * stride
+          I i ->
+            i * stride
+    ) slices $ V.toList stride) dat) dimsToInsert
+  }
 
 -- | An infix synonym for slice.
--- (!:) :: (Storable t) => Tensor t -> Slices -> Tensor t
--- (!:) = slice
+(!:) :: (Storable t) => Tensor t -> Slices -> Tensor t
+(!:) = slice
 
 -- validateTensorIndex :: TensorIndex -> Bool
 -- validateTensorIndex = allEqual . Prelude.map shape
@@ -503,6 +520,14 @@ insertDim (Tensor shape stride offset dat) dim =
       ++ show shape
   }}
 
+-- | Insert a new dims into a tensor.
+--
+--   @dims@ specifies indices in the /resulting/ tensor.
+--
+--   Signature: @tensor -> dims -> tensor@
+insertDims :: (Storable t) => Tensor t -> [Int] -> Tensor t
+insertDims = Data.List.foldl' insertDim
+
 -- -- | tensor -> dim -> times
 -- repeatAlongDim :: (Storable t) => Tensor t -> Int -> Int -> Tensor t
 -- repeatAlongDim x@(Tensor shape _) dim times =
@@ -558,7 +583,7 @@ swapDims x@(Tensor shape stride offset dat) dim1 dim2 =
 {-# INLINE tensorEqual #-}
 
 {-# INLINE unsafeGetElem #-}
--- {-# INLINE slice #-}
+{-# INLINE slice #-}
 -- {-# INLINE advancedIndex #-}
 -- {-# INLINE item #-}
 

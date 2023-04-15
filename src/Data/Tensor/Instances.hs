@@ -94,11 +94,13 @@ instance (Storable t, Show t) => Show (Tensor t) where
             replicate (fLength - length strElem) ' '
             ++ strElem
             ++
-              if last index < V.last shape - 1 &&
-                  currentLine `div` (maxLine - length prefix) >
-                  previousLine `div` (maxLine - length prefix) then
+              if not (V.null shape) &&
+                 last index < V.last shape - 1 &&
+                 currentLine `div` (maxLine - length prefix) >
+                 previousLine `div` (maxLine - length prefix) then
                 ",\n" ++ prefix
-              else if last index < V.last shape - 1 then
+              else if not (V.null shape) &&
+                      last index < V.last shape - 1 then
                 ", "
               else ""
         where
@@ -150,11 +152,13 @@ instance (Storable t, Show t) => Show (Tensor t) where
             replicate (fLength - length strElem) ' '
             ++ strElem
             ++
-              if normI < V.last shape - 1 && normI < 2 * nPart - 1 &&
-                  currentLine `div` (maxLine - length prefix) >
-                  previousLine `div` (maxLine - length prefix) then
+              if not (V.null shape) &&
+                 normI < V.last shape - 1 && normI < 2 * nPart - 1 &&
+                 currentLine `div` (maxLine - length prefix) >
+                 previousLine `div` (maxLine - length prefix) then
                 ",\n" ++ prefix
-              else if normI < V.last shape - 1 && normI < 2 * nPart - 1 then
+              else if not (V.null shape) &&
+                      normI < V.last shape - 1 && normI < 2 * nPart - 1 then
                 ", "
               else ""
         where
