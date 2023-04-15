@@ -74,6 +74,13 @@ class (Storable t, Fractional t, NumTensor t) => FractionalTensor t where
 
 -- | Typeclass for floating operations.
 class (Storable t, Floating t, FractionalTensor t) => FloatingTensor t where
+  -- | Returns True if two arrays are element-wise equal within a tolerance.
+  allCloseTol :: t -> t -> Tensor t -> Tensor t -> Bool
+  
+  -- | Returns True if two arrays are element-wise equal within a default tolerance.
+  allClose :: Tensor t -> Tensor t -> Bool
+  allClose = allCloseTol 1e-05 1e-08
+
   floatTExp :: Tensor t -> Tensor t
   floatTLog :: Tensor t -> Tensor t
   floatTSin :: Tensor t -> Tensor t

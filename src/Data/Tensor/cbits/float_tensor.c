@@ -1,5 +1,8 @@
 #include <stdlib.h>
+#include <math.h>
+
 #include "cbits.h"
+
 
 void
 eye_f (
@@ -79,6 +82,20 @@ map_f (
     free(index);
 }
 
+float
+neg_f(
+    float arg)
+{
+    return -arg;
+}
+
+float
+sign_f(
+    float arg)
+{
+    return (0 < arg) - (arg < 0);
+}
+
 void
 elementwise_f (
     int n_dims,
@@ -149,16 +166,43 @@ div_f(
     return arg1 / arg2;
 }
 
-float
-neg_f(
-    float arg)
+int
+allclose_f (
+    float rtol,
+    float atol,
+    int n_dims,
+    int *shape,
+    int elem_size,
+    int *stride1,
+    int offset1,
+    char *dat1,
+    int *stride2,
+    int offset2,
+    char *dat2)
 {
-    return -arg;
-}
-
-float
-sign_f(
-    float arg)
-{
-    return (0 < arg) - (arg < 0);
+    int *index = calloc(n_dims, sizeof(int));
+    int numel = total_elems(n_dims, shape);
+    int f_index1 = offset1;
+    int f_index2 = offset2;
+    for (int i = 0; i < numel; ++i) {
+        float elem1 = *(float *) dat1 + f_index1;
+        float elem2 = *(float *) dat2 + f_index2;
+        if (fabsf(elem1 - elem2) > (atol + rtol * fabsf(elem2))) {
+            return 0;
+        }
+        for (int dim = n_dims - 1; dim >= 0; --dim) {
+            index[dim] += 1;
+            f_index1 += stride1[dim];
+            f_index2 += stride2[dim];
+            if (index[dim] == shape[dim]) {
+                index[dim] = 0;
+                f_index1 -= stride1[dim] * shape[dim];
+                f_index2 -= stride2[dim] * shape[dim];
+            } else {
+                break;
+            }
+        }
+    }
+    free(index);
+    return 1;
 }

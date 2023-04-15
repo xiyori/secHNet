@@ -269,6 +269,32 @@ instance FractionalTensor CFloat where
   {-# INLINE fracTDiv #-}
 
 instance FloatingTensor CFloat where
+  allCloseTol :: CFloat -> CFloat -> Tensor CFloat -> Tensor CFloat -> Bool
+  allCloseTol rtol atol
+    (Tensor shape stride1 offset1 dat1)
+    (Tensor shape2 stride2 offset2 dat2)
+    | shape == shape2 =
+      case sizeOfElem dat1 of {elemSize ->
+      case V.unsafeCast dat1 of {data1CChar ->
+      case V.unsafeCast dat2 of {data2CChar ->
+        toBool [CU.pure| int {
+          allclose_f(
+            $(float rtol),
+            $(float atol),
+            $vec-len:shape,
+            $vec-ptr:(int *shape),
+            $(int elemSize),
+            $vec-ptr:(int *stride1),
+            $(int offset1),
+            $vec-ptr:(char *data1CChar),
+            $vec-ptr:(int *stride2),
+            $(int offset2),
+            $vec-ptr:(char *data2CChar)
+          )
+        } |]
+      }}}
+    | otherwise = False
+
   floatTExp :: Tensor CFloat -> Tensor CFloat
   floatTExp (Tensor shape stride offset dat) =
     case V.unsafeCast dat of {dataCChar ->

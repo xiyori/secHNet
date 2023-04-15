@@ -26,6 +26,16 @@ map_f (
     float (*f)(float)
 );
 
+float
+neg_f(
+    float arg
+);
+
+float
+sign_f(
+    float arg
+);
+
 void
 elementwise_f (
     int n_dims,
@@ -64,12 +74,17 @@ div_f(
     float arg2
 );
 
-float
-neg_f(
-    float arg
-);
-
-float
-sign_f(
-    float arg
+int
+allclose_f (
+    float rtol,
+    float atol,
+    int n_dims,
+    int *shape,
+    int elem_size,
+    int *stride1,
+    int offset1,
+    char *dat1,
+    int *stride2,
+    int offset2,
+    char *dat2
 );

@@ -61,7 +61,7 @@ zeros shape = full shape 0
 ones :: (Storable t, Num t) => Index -> Tensor t
 ones shape = full shape 1
 
--- | Return a new scalar tensor with a single value.
+-- | Return a new tensor of shape [] with a single value.
 scalar :: (Storable t, Num t) => t -> Tensor t
 scalar = full V.empty
 
@@ -197,13 +197,14 @@ unsafeElementwise f x1 x2 =
 --   Consider using them if possible.
 elementwise :: (Storable a, Storable b, Storable c) =>
   (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
-elementwise f x1@(Tensor shape1 _ _ _) x2@(Tensor shape2 _ _ _)
-  | totalElems shape1 == 1 =
-    Data.Tensor.Functional.map (f $ item x1) x2
-  | totalElems shape2 == 1 =
-    Data.Tensor.Functional.map (flip f $ item x2) x1
-  | otherwise =
-    uncurry (unsafeElementwise f) $ broadcast x1 x2
+elementwise f x1 x2 =
+  case broadcast x1 x2 of {(x1, x2) ->
+    if totalElems (shape x1) == 1 then
+      Data.Tensor.Functional.map (f $ item x1) x2
+    else if totalElems (shape x2) == 1 then
+      Data.Tensor.Functional.map (flip f $ item x2) x1
+    else unsafeElementwise f x1 x2
+  }
 
 -- dot :: Num t => Tensor t -> Tensor t -> Tensor t
 -- dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
@@ -375,7 +376,7 @@ flatten :: (Storable t) => Tensor t -> Tensor t
 flatten x =
   case copy x of {(Tensor shape stride offset dat) ->
     Tensor (V.singleton $ totalElems shape)
-      (V.singleton $ V.last stride) offset dat
+      (V.singleton $ sizeOfElem dat) offset dat
   }
 
 -- | Map a function over a tensor.
@@ -460,7 +461,7 @@ insertDim :: (Storable t) => Tensor t -> Int -> Tensor t
 insertDim (Tensor shape stride offset dat) dim =
   case V.length shape of {nDims ->
   case normalizeItem nDims dim of {normDim ->
-    if 0 <= normDim && normDim < nDims then
+    if 0 <= normDim && normDim <= nDims then
       Tensor
       (V.concat [
           V.take normDim shape,

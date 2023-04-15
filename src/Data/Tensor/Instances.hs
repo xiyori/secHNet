@@ -15,14 +15,14 @@ instance NumTensor t => Num (Tensor t) where
   negate = numTNegate
   abs = numTAbs
   signum = numTSignum
-  fromInteger = single . fromInteger
+  fromInteger = scalar . fromInteger
 
 instance FractionalTensor t => Fractional (Tensor t) where
   (/) = fracTDiv
-  fromRational = single . fromRational
+  fromRational = scalar . fromRational
 
 instance FloatingTensor t => Floating (Tensor t) where
-  pi = single pi
+  pi = scalar pi
   exp = floatTExp
   log = floatTLog
   sin = floatTSin
