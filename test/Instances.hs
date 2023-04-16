@@ -13,7 +13,7 @@ import Test.QuickCheck
 import Foreign.C.Types
 
 
-instance (Storable t, Random t, Floating t) => Arbitrary (Tensor t) where
+instance (HasDtype t, Random t, Floating t) => Arbitrary (Tensor t) where
   arbitrary :: Gen (Tensor t)
   arbitrary = do
     shape <- arbitrary
@@ -26,7 +26,7 @@ instance Arbitrary (Vector CInt) where
     list <- vectorOf nDims $ chooseEnum (0, 10)
     return $ V.fromList list
 
-arbitraryWithShape :: (Storable t, Random t, Floating t) =>
+arbitraryWithShape :: (HasDtype t, Random t, Floating t) =>
   Vector CInt -> Gen (Tensor t)
 arbitraryWithShape shape = do
   isContiguous <- chooseAny
@@ -55,7 +55,7 @@ arbitrarySlices shape expandedShape =
           start :. start + dim
   ) (V.toList shape) (V.toList expandedShape)
 
-arbitraryContiguousWithShape :: (Storable t, Random t, Floating t) =>
+arbitraryContiguousWithShape :: (HasDtype t, Random t, Floating t) =>
   Vector CInt -> Gen (Tensor t)
 arbitraryContiguousWithShape shape = do
   seed <- chooseAny
@@ -63,14 +63,14 @@ arbitraryContiguousWithShape shape = do
     return $ fst $ randn shape gen
   }
 
-arbitraryPairWithShape :: (Storable t, Random t, Floating t) =>
+arbitraryPairWithShape :: (HasDtype t, Random t, Floating t) =>
   Vector CInt -> Gen (Tensor t, Tensor t)
 arbitraryPairWithShape shape = do
   x1 <- arbitraryWithShape shape
   x2 <- arbitraryWithShape shape
   return (x1, x2)
 
-arbitraryBroadcastablePair :: (Storable t, Random t, Floating t) =>
+arbitraryBroadcastablePair :: (HasDtype t, Random t, Floating t) =>
   Gen (Tensor t, Tensor t)
 arbitraryBroadcastablePair = do
   (shape1, shape2) <- arbitraryBroadcastableShapes

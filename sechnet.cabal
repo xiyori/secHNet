@@ -23,7 +23,6 @@ extra-source-files: CHANGELOG.md
 
 executable sechnet
     main-is:          Main.hs
---    other-modules:    Bank.Handle
     build-depends:
       base
       , secHNet
@@ -46,7 +45,6 @@ library
         Data.Tensor.Definitions,
         Data.Tensor.Functional,
         Data.Tensor.Instances,
-        Data.Tensor.FloatTensor,
         Data.Tensor
         Data.Layers.Layer,
         Handle.LayerHandle,
@@ -74,7 +72,7 @@ library
     default-language: Haskell2010
     C-sources:
       src/Data/Tensor/cbits/cbits.c
-      , src/Data/Tensor/cbits/float_tensor.c
+      , src/Data/Tensor/cbits/num_tensor.c
     cc-options: -O3
     ghc-options: -funbox-strict-fields -fforce-recomp
 

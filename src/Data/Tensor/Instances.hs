@@ -1,54 +1,579 @@
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE InstanceSigs #-}
+
 module Data.Tensor.Instances where
 
 import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as V
+import qualified Data.Vector.Storable.Mutable as VM
 import Data.List
 import Data.Tensor.Index
+import Data.Tensor.Size
 import Data.Tensor.Definitions
 import Data.Tensor.Functional as T
 
+import System.IO.Unsafe
+import Foreign
 import Foreign.C.Types
+import qualified Language.C.Inline as C
+import qualified Language.C.Inline.Unsafe as CU
+
+-- Use vector anti-quoters.
+C.context (C.baseCtx <> C.vecCtx)
+-- Include C headers.
+C.include "<math.h>"
+-- Include C utils.
+C.include "cbits/num_tensor.h"
 
 
-instance Storable t => Eq (Tensor t) where
+instance HasDtype CChar where
+  tensorDtype _ = 1
+  showDtype _ = "int8"
+
+instance HasDtype CUChar where
+  tensorDtype _ = 2
+  showDtype _ = "uint8"
+
+instance HasDtype CShort where
+  tensorDtype _ = 3
+  showDtype _ = "int16"
+
+instance HasDtype CUShort where
+  tensorDtype _ = 4
+  showDtype _ = "uint16"
+
+instance HasDtype CInt where
+  tensorDtype _ = 5
+  showDtype _ = "int32"
+
+instance HasDtype CUInt where
+  tensorDtype _ = 6
+  showDtype _ = "uint32"
+
+instance HasDtype CLLong where
+  tensorDtype _ = 7
+  showDtype _ = "int64"
+
+instance HasDtype CULLong where
+  tensorDtype _ = 8
+  showDtype _ = "uint64"
+
+instance HasDtype CFloat where
+  tensorDtype _ = 10
+  showDtype _ = "float32"
+
+instance HasDtype CDouble where
+  tensorDtype _ = 11
+  showDtype _ = "float64"
+
+instance HasDtype t => Eq (Tensor t) where
   (==) = tensorEqual
 
-instance NumTensor t => Num (Tensor t) where
-  (+) = numTAdd
-  (-) = numTSub
-  (*) = numTMult
-  negate = numTNegate
-  abs = numTAbs
-  signum = numTSignum
+instance (HasDtype t, Num t) => Num (Tensor t) where
+  (+) x1 x2 =
+    case broadcast x1 x2 of {(
+      Tensor shape stride1 offset1 dat1,
+      Tensor _ stride2 offset2 dat2
+    ) ->
+    case tensorDtype x1 of {dtype ->
+    case V.unsafeCast dat1 of {data1CChar ->
+    case V.unsafeCast dat2 of {data2CChar ->
+      Tensor shape (computeStride (sizeOfElem dat1) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_add(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $(int dtype),
+              $vec-ptr:(int *stride1),
+              $(int offset1),
+              $vec-ptr:(char *data1CChar),
+              $vec-ptr:(int *stride2),
+              $(int offset2),
+              $vec-ptr:(char *data2CChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}}}
+
+  (-) x1 x2 =
+    case broadcast x1 x2 of {(
+      Tensor shape stride1 offset1 dat1,
+      Tensor _ stride2 offset2 dat2
+    ) ->
+    case tensorDtype x1 of {dtype ->
+    case V.unsafeCast dat1 of {data1CChar ->
+    case V.unsafeCast dat2 of {data2CChar ->
+      Tensor shape (computeStride (sizeOfElem dat1) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_sub(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $(int dtype),
+              $vec-ptr:(int *stride1),
+              $(int offset1),
+              $vec-ptr:(char *data1CChar),
+              $vec-ptr:(int *stride2),
+              $(int offset2),
+              $vec-ptr:(char *data2CChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}}}
+
+  (*) x1 x2 =
+    case broadcast x1 x2 of {(
+      Tensor shape stride1 offset1 dat1,
+      Tensor _ stride2 offset2 dat2
+    ) ->
+    case tensorDtype x1 of {dtype ->
+    case V.unsafeCast dat1 of {data1CChar ->
+    case V.unsafeCast dat2 of {data2CChar ->
+      Tensor shape (computeStride (sizeOfElem dat1) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_mult(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $(int dtype),
+              $vec-ptr:(int *stride1),
+              $(int offset1),
+              $vec-ptr:(char *data1CChar),
+              $vec-ptr:(int *stride2),
+              $(int offset2),
+              $vec-ptr:(char *data2CChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}}}
+
+  negate x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_neg(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  abs x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_abs(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  signum x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_sign(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
   fromInteger = scalar . fromInteger
+  {-# INLINE (+) #-}
+  {-# INLINE (-) #-}
+  {-# INLINE (*) #-}
+  {-# INLINE negate #-}
+  {-# INLINE abs #-}
+  {-# INLINE signum #-}
 
-instance FractionalTensor t => Fractional (Tensor t) where
-  (/) = fracTDiv
+instance (HasDtype t, Fractional t) => Fractional (Tensor t) where
+  (/) x1 x2 =
+    case broadcast x1 x2 of {(
+      Tensor shape stride1 offset1 dat1,
+      Tensor _ stride2 offset2 dat2
+    ) ->
+    case tensorDtype x1 of {dtype ->
+    case V.unsafeCast dat1 of {data1CChar ->
+    case V.unsafeCast dat2 of {data2CChar ->
+      Tensor shape (computeStride (sizeOfElem dat1) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_div(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $(int dtype),
+              $vec-ptr:(int *stride1),
+              $(int offset1),
+              $vec-ptr:(char *data1CChar),
+              $vec-ptr:(int *stride2),
+              $(int offset2),
+              $vec-ptr:(char *data2CChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}}}
+
   fromRational = scalar . fromRational
+  {-# INLINE (/) #-}
 
-instance FloatingTensor t => Floating (Tensor t) where
+instance (HasDtype t, Floating t) => Floating (Tensor t) where
   pi = scalar pi
-  exp = floatTExp
-  log = floatTLog
-  sin = floatTSin
-  cos = floatTCos
-  asin = floatTAsin
-  acos = floatTAcos
-  atan = floatTAtan
-  sinh = floatTSinh
-  cosh = floatTCosh
-  asinh = floatTAsinh
-  acosh = floatTAcosh
-  atanh = floatTAtanh
 
-instance (Storable t, HasDtype t, Show t) => Show (Tensor t) where
+  exp x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_exp(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  log x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_log(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  sin x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_sin(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  cos x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_cos(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  asin x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_asin(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  acos x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_acos(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  atan x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_atan(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  sinh x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_sinh(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  cosh x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_cosh(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  asinh x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_asinh(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  acosh x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_acosh(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
+  atanh x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_atanh(
+              $vec-len:shape,
+              $vec-ptr:(int *shape),
+              $vec-ptr:(int *stride),
+              $(int offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+  {-# INLINE exp #-}
+  {-# INLINE log #-}
+  {-# INLINE sin #-}
+  {-# INLINE cos #-}
+  {-# INLINE asin #-}
+  {-# INLINE acos #-}
+  {-# INLINE atan #-}
+  {-# INLINE sinh #-}
+  {-# INLINE cosh #-}
+  {-# INLINE asinh #-}
+  {-# INLINE acosh #-}
+
+instance (HasDtype t, Show t) => Show (Tensor t) where
   show x@(Tensor shape _ _ _)
     -- Print info about empty tensor
     | totalElems shape == 0 =
       "tensor([], shape="
       ++ show shape
       ++ ", dtype="
-      ++ tensorDtype x
+      ++ showDtype x
       ++ ")"
     -- Print all elements
     | totalElems shape <= maxElements =

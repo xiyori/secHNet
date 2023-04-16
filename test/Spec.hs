@@ -273,7 +273,9 @@ prop_add_commutative = do
 prop_num_associative :: Index -> Gen Bool
 prop_num_associative shape = do
   (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CFloat, Tensor CFloat)
-  return $ ((x1 + x2) * x2) `allClose` (x1 * x2 + x2 * x2)
+  return $
+    -- unsafePerformIO $ print (((x1 + x2) * x2) - (x1 * x2 + x2 * x2)) >>
+     (((x1 + x2) * x2) `allClose` (x1 * x2 + x2 * x2))
 
 
 -- Instances
@@ -300,7 +302,7 @@ prop_show_range =
 prop_show_empty :: Bool
 prop_show_empty =
   show (zeros (V.fromList [1, 2, 0]) :: Tensor CFloat) ==
-  "tensor([], shape=[1,2,0], dtype=float)"
+  "tensor([], shape=[1,2,0], dtype=float32)"
 
 return []
 
