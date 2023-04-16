@@ -3,6 +3,8 @@
 
 #include "cbits.h"
 
+#include <stdio.h>
+
 
 void
 eye_f (
@@ -185,8 +187,8 @@ allclose_f (
     int f_index1 = offset1;
     int f_index2 = offset2;
     for (int i = 0; i < numel; ++i) {
-        float elem1 = *(float *) dat1 + f_index1;
-        float elem2 = *(float *) dat2 + f_index2;
+        float elem1 = *(float *) (dat1 + f_index1);
+        float elem2 = *(float *) (dat2 + f_index2);
         if (fabsf(elem1 - elem2) > (atol + rtol * fabsf(elem2))) {
             return 0;
         }

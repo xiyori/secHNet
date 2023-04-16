@@ -23,11 +23,11 @@ data Slice
   | S CInt
   -- | Slice till end, analogous to NumPy @:end@.
   | E CInt
-  | CInt  -- | Slice @start:.end@, analogous to
+  | CInt  -- | Slice @start :. end@, analogous to
           --   NumPy @start:end@.
           :. CInt
-  | Slice -- | Slice @S start:|step@, @E end:|step@
-          --   or @start:.end:|step@, analogous to
+  | Slice -- | Slice @S start :| step@, @E end :| step@
+          --   or @start :. end :| step@, analogous to
           --   NumPy @start:end:step@.
           :| CInt
   -- | Insert new dim, analogous to NumPy @None@.
@@ -41,6 +41,10 @@ infixl 5 :|
 
 -- | Slice indexer data type.
 type Slices = [Slice]
+
+-- | todo.
+parseShape1 :: [t] -> Index
+parseShape1 listData = V.singleton $ fromIntegral $ length listData
 
 -- | Coefficients for index flattening.
 --
@@ -181,9 +185,9 @@ parseEllipses nDims slices =
 --   Signature: @i -> dim -> slice -> normSlice@
 normalizeSlice :: Int -> CInt -> Slice -> CInt -> Slice
 normalizeSlice axis dim (I i) step =
-  case normalizeItem dim i of {normIndex ->
-    if 0 <= normIndex && normIndex < dim then
-      I normIndex
+  case normalizeItem dim i of {normI ->
+    if 0 <= normI && normI < dim then
+      I normI
     else
       error
       $ "index "
@@ -211,7 +215,7 @@ normalizeSlice axis dim slice step
           start :. max start end :| step
         }}
       badSlice ->
-        error $ "incorrect slice " ++ show badSlice
+        error $ "incorrect slice " ++ show (badSlice :| step)
   | step < 0 =
     case slice of
       A -> dim - 1 :. -1 :| step
@@ -229,7 +233,7 @@ normalizeSlice axis dim slice step
           max start end :. end :| step
         }}
       badSlice ->
-        error $ "incorrect slice " ++ show badSlice
+        error $ "incorrect slice " ++ show (badSlice :| step)
   | otherwise =
     error "slice step cannot be zero"
 

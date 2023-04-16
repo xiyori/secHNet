@@ -32,6 +32,16 @@ C.include "cbits/cbits.h"
 -- Construction
 -- ------------
 
+-- | Convert a list to a 1-D tensor.
+--
+--   Signature: @list -> tensor@
+fromList :: Storable t => [t] -> Tensor t
+fromList listData =
+  case parseShape1 listData of {shape ->
+  case V.fromList listData of {dat ->
+    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  }}
+
 -- | Generate a tensor from a generator function.
 --
 --   Signature: @shape -> generator -> tensor@
@@ -162,40 +172,6 @@ broadcast (Tensor shape1 stride1 offset1 dat1)
     ++ show shape2
     ++ " can not be broadcasted"
 
--- | Perform elementwise operation without cheking
---   for validity of arguments.
---
---   This function is not safe to use,
---   consider using @elementwise@ instead.
---
---   /WARNING:/ This function involves copying and
---   can be less efficient than native tensor operations.
---   Consider using them if possible.
-unsafeElementwise :: (Storable a, Storable b, Storable c) =>
-  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
-unsafeElementwise f x1 x2 =
-  case copy x1 of {(Tensor shape stride offset dat1) ->
-  case copy x2 of {(Tensor _ _ _ dat2) ->
-    Tensor shape stride offset
-    $ V.zipWith f dat1 dat2
-  }}
-
--- | Perform elementwise operation with broadcasting.
---
---   /WARNING:/ This function involves copying and
---   can be less efficient than native tensor operations.
---   Consider using them if possible.
-elementwise :: (Storable a, Storable b, Storable c) =>
-  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
-elementwise f x1 x2 =
-  case broadcast x1 x2 of {(x1, x2) ->
-    if totalElems (shape x1) == 1 then
-      Data.Tensor.Functional.map (f $ item x1) x2
-    else if totalElems (shape x2) == 1 then
-      Data.Tensor.Functional.map (flip f $ item x2) x1
-    else unsafeElementwise f x1 x2
-  }
-
 -- dot :: Num t => Tensor t -> Tensor t -> Tensor t
 -- dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
 --   Tensor (mergeIndex arrayShape (matrixRows1, matrixCols2))
@@ -235,6 +211,40 @@ tensorEqual (Tensor shape stride1 offset1 dat1)
 -- Return (x1 == x2) element-wise.
 -- equal :: (Storable t) => Tensor t -> Tensor t -> Tensor CBool
 -- equal
+
+-- | Perform elementwise operation without cheking
+--   for validity of arguments.
+--
+--   This function is not safe to use,
+--   consider using @elementwise@ instead.
+--
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
+unsafeElementwise :: (Storable a, Storable b, Storable c) =>
+  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
+unsafeElementwise f x1 x2 =
+  case copy x1 of {(Tensor shape stride offset dat1) ->
+  case copy x2 of {(Tensor _ _ _ dat2) ->
+    Tensor shape stride offset
+    $ V.zipWith f dat1 dat2
+  }}
+
+-- | Perform elementwise operation with broadcasting.
+--
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
+elementwise :: (Storable a, Storable b, Storable c) =>
+  (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
+elementwise f x1 x2 =
+  case broadcast x1 x2 of {(x1, x2) ->
+    if totalElems (shape x1) == 1 then
+      Data.Tensor.Functional.map (f $ item x1) x2
+    else if totalElems (shape x2) == 1 then
+      Data.Tensor.Functional.map (flip f $ item x2) x1
+    else unsafeElementwise f x1 x2
+  }
 
 
 -- Indexing
@@ -296,9 +306,7 @@ slice x@(Tensor shape stride offset dat) slices =
       \ slice stride ->
         case slice of
           start :. end :| step ->
-            if step > 0 then
-              start * stride
-            else end * stride
+            start * stride
           I i ->
             i * stride
     ) slices $ V.toList stride) dat) dimsToInsert
@@ -332,7 +340,7 @@ slice x@(Tensor shape stride offset dat) slices =
 item :: (Storable t) => Tensor t -> t
 item x@(Tensor shape _ _ _)
   | totalElems shape == 1 =
-      unsafeGetElem x $ V.singleton 0
+      unsafeGetElem x $ V.replicate (V.length shape) 0
   | otherwise =
     error
     $ "cannot get item from tensor of shape "
@@ -418,40 +426,6 @@ view x@(Tensor shape stride offset dat) newShape
     ++ show shape
     ++ " into shape "
     ++ show newShape
-
--- | Map a function over a tensor.
---
---   /WARNING:/ This function involves copying and
---   can be less efficient than native tensor operations.
---   Consider using them if possible.
-map :: (Storable a, Storable b) => (a -> b) -> Tensor a -> Tensor b
-map f x =
-  case copy x of {(Tensor shape stride offset dat) ->
-    Tensor shape stride offset
-    $ V.map f dat
-  }
-
--- | Left fold with strict accumulator.
---
---   /WARNING:/ This function involves copying and
---   can be less efficient than native tensor operations.
---   Consider using them if possible.
-foldl' :: Storable b => (a -> b -> a) -> a -> Tensor b -> a
-foldl' f accum x =
-  case copy x of {(Tensor shape stride offset dat) ->
-    V.foldl' f accum dat
-  }
-
--- | Right fold with strict accumulator.
---
---   /WARNING:/ This function involves copying and
---   can be less efficient than native tensor operations.
---   Consider using them if possible.
-foldr' :: Storable b => (b -> a -> a) -> a -> Tensor b -> a
-foldr' f accum x =
-  case copy x of {(Tensor shape stride offset dat) ->
-    V.foldr' f accum dat
-  }
 
 -- sumAlongDim :: (Storable t, Num t) =>
 --   Tensor t -> Int -> Tensor t
@@ -567,6 +541,40 @@ swapDims x@(Tensor shape stride offset dat) dim1 dim2 =
       ++ show shape
   }}}
 
+-- | Map a function over a tensor.
+--
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
+map :: (Storable a, Storable b) => (a -> b) -> Tensor a -> Tensor b
+map f x =
+  case copy x of {(Tensor shape stride offset dat) ->
+    Tensor shape stride offset
+    $ V.map f dat
+  }
+
+-- | Left fold with strict accumulator.
+--
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
+foldl' :: Storable b => (a -> b -> a) -> a -> Tensor b -> a
+foldl' f accum x =
+  case copy x of {(Tensor shape stride offset dat) ->
+    V.foldl' f accum dat
+  }
+
+-- | Right fold with strict accumulator.
+--
+--   /WARNING:/ This function involves copying and
+--   can be less efficient than native tensor operations.
+--   Consider using them if possible.
+foldr' :: Storable b => (b -> a -> a) -> a -> Tensor b -> a
+foldr' f accum x =
+  case copy x of {(Tensor shape stride offset dat) ->
+    V.foldr' f accum dat
+  }
+
 {-# INLINE tensor #-}
 {-# INLINE full #-}
 -- {-# INLINE zeros #-}
@@ -576,11 +584,11 @@ swapDims x@(Tensor shape stride offset dat) dim1 dim2 =
 {-# INLINE randn #-}
 {-# INLINE randnM #-}
 
-{-# INLINE unsafeElementwise #-}
--- {-# INLINE elementwise #-}
 {-# INLINE broadcast #-}
 -- {-# INLINE dot #-}
 {-# INLINE tensorEqual #-}
+{-# INLINE unsafeElementwise #-}
+-- {-# INLINE elementwise #-}
 
 {-# INLINE unsafeGetElem #-}
 {-# INLINE slice #-}
@@ -591,12 +599,12 @@ swapDims x@(Tensor shape stride offset dat) dim1 dim2 =
 {-# INLINE copy #-}
 -- {-# INLINE transpose #-}
 -- {-# INLINE flatten #-}
-{-# INLINE map #-}
-{-# INLINE foldl' #-}
-{-# INLINE foldr' #-}
 -- {-# INLINE mean #-}
 -- {-# INLINE sumAlongDim #-}
 -- {-# INLINE sumAlongDimKeepDims #-}
 -- {-# INLINE insertDim #-}
 -- {-# INLINE repeatAlongDim #-}
 -- {-# INLINE swapDims #-}
+{-# INLINE map #-}
+{-# INLINE foldl' #-}
+{-# INLINE foldr' #-}

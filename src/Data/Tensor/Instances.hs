@@ -41,8 +41,15 @@ instance FloatingTensor t => Floating (Tensor t) where
   acosh = floatTAcosh
   atanh = floatTAtanh
 
-instance (Storable t, Show t) => Show (Tensor t) where
+instance (Storable t, HasDtype t, Show t) => Show (Tensor t) where
   show x@(Tensor shape _ _ _)
+    -- Print info about empty tensor
+    | totalElems shape == 0 =
+      "tensor([], shape="
+      ++ show shape
+      ++ ", dtype="
+      ++ tensorDtype x
+      ++ ")"
     -- Print all elements
     | totalElems shape <= maxElements =
       "tensor("
@@ -77,32 +84,28 @@ instance (Storable t, Show t) => Show (Tensor t) where
 
       goAll fLength prefix index
         | dim < nDims =
-          "["
+          (if not (null index) && last index /= 0 then
+            ","
+            ++ replicate (nDims - dim) '\n'
+            ++ prefix
+          else "")
+          ++ "["
           ++ concatMap (goAll fLength (prefix ++ " ") . (
             \ i -> index ++ [i]
           )) [0 .. (shape V.! dim) - 1]
-          ++
-            if not (null index) && last index < (shape V.! (dim - 1)) - 1 then
-              "],"
-              ++ replicate (nDims - dim) '\n'
-              ++ prefix
-            else "]"
+          ++ "]"
         | otherwise =
           let strElem = showCompact (x ! index)
-              currentLine = (fLength + 2) * fromIntegral (last index + 1)
-              previousLine = (fLength + 2) * fromIntegral (last index) in
-            replicate (fLength - length strElem) ' '
+              maxLineIndex = fromIntegral $
+                (maxLine - length prefix) `div` (fLength + 2) in
+            (if not (null index) && last index > 0 &&
+                last index `mod` maxLineIndex == 0 then
+              ",\n" ++ prefix
+            else if not (null index) && last index > 0 then
+              ", "
+            else "")
+            ++ replicate (fLength - length strElem) ' '
             ++ strElem
-            ++
-              if not (V.null shape) &&
-                 last index < V.last shape - 1 &&
-                 currentLine `div` (maxLine - length prefix) >
-                 previousLine `div` (maxLine - length prefix) then
-                ",\n" ++ prefix
-              else if not (V.null shape) &&
-                      last index < V.last shape - 1 then
-                ", "
-              else ""
         where
           dim = length index
 
@@ -121,46 +124,40 @@ instance (Storable t, Show t) => Show (Tensor t) where
       goPart fLength prefix index
         | not (null index) && last index == ldots =
           if dim == nDims then
-            "..., "
+            ", ..."
           else
-            "...,"
+            ","
             ++ replicate (nDims - dim) '\n'
             ++ prefix
+            ++ "..."
         | dim < nDims =
-          let normI = normalizeItem (2 * nPart) (last index) in
-            "["
-            ++ concatMap (goPart fLength (prefix ++ " ") . (
-              \ i -> index ++ [i]
-            )) (
-              if shape V.! dim > nPart * 2 then
-                [0 .. nPart - 1] ++ [ldots] ++ [-nPart .. -1]
-              else
-                [0 .. (shape V.! dim) - 1]
-            ) ++
-              if not (null index) &&
-                 normI < (shape V.! (dim - 1)) - 1 &&
-                 normI < 2 * nPart - 1 then
-                "],"
-                ++ replicate (nDims - dim) '\n'
-                ++ prefix
-              else "]"
+          (if not (null index) && last index /= 0 then
+            ","
+            ++ replicate (nDims - dim) '\n'
+            ++ prefix
+          else "")
+          ++ "["
+          ++ concatMap (goPart fLength (prefix ++ " ") . (
+            \ i -> index ++ [i]
+          )) (
+            if shape V.! dim > nPart * 2 then
+              [0 .. nPart - 1] ++ [ldots] ++ [-nPart .. -1]
+            else
+              [0 .. (shape V.! dim) - 1]
+          ) ++ "]"
         | otherwise =
           let strElem = showCompact (x ! index)
               normI = normalizeItem (2 * nPart) (last index)
-              currentLine = (fLength + 2) * fromIntegral (normI + 1)
-              previousLine = (fLength + 2) * fromIntegral normI in
-            replicate (fLength - length strElem) ' '
+              maxLineIndex = fromIntegral $
+                (maxLine - length prefix) `div` (fLength + 2) in
+            -- show normI ++ " " ++ show maxLineIndex ++ " " ++
+            (if normI > 0 && normI `mod` maxLineIndex == 0 then
+              ",\n" ++ prefix
+            else if normI > 0 then
+              ", "
+            else "")
+            ++ replicate (fLength - length strElem) ' '
             ++ strElem
-            ++
-              if not (V.null shape) &&
-                 normI < V.last shape - 1 && normI < 2 * nPart - 1 &&
-                 currentLine `div` (maxLine - length prefix) >
-                 previousLine `div` (maxLine - length prefix) then
-                ",\n" ++ prefix
-              else if not (V.null shape) &&
-                      normI < V.last shape - 1 && normI < 2 * nPart - 1 then
-                ", "
-              else ""
         where
           dim = length index
   {-# INLINE show #-}

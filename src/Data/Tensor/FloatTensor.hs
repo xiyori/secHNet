@@ -26,6 +26,10 @@ C.include "<math.h>"
 C.include "cbits/float_tensor.h"
 
 
+instance HasDtype CFloat where
+  tensorDtype :: Tensor CFloat -> String
+  tensorDtype _ = "float"
+
 instance NumTensor CFloat where
   eye :: CInt -> CInt -> CInt -> Tensor CFloat
   eye rows columns diagonalIndex =

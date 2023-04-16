@@ -3,6 +3,7 @@
 
 module Instances where
 
+import Control.Monad
 import Data.Vector.Storable (Storable, Vector, (//))
 import qualified Data.Vector.Storable as V
 import System.Random
@@ -28,6 +29,35 @@ instance Arbitrary (Vector CInt) where
 arbitraryWithShape :: (Storable t, Random t, Floating t) =>
   Vector CInt -> Gen (Tensor t)
 arbitraryWithShape shape = do
+  isContiguous <- chooseAny
+  if isContiguous then
+    arbitraryContiguousWithShape shape
+  else do
+    expandedShape <- V.mapM (
+      \ dim -> do
+        addDim <- chooseEnum (0, 10)
+        return $ dim + addDim
+      ) shape
+    slices <- arbitrarySlices shape expandedShape
+    x <- arbitraryContiguousWithShape expandedShape
+    return $ x !: slices
+
+arbitrarySlices :: Index -> Index -> Gen Slices
+arbitrarySlices shape expandedShape =
+  zipWithM (
+    \ dim expDim -> do
+      start <- chooseEnum (0, expDim - dim)
+      isNegative <- chooseAny
+      return $
+        if isNegative then
+          -(start + 1) :. -(start + dim + 1) :| -1
+        else
+          start :. start + dim
+  ) (V.toList shape) (V.toList expandedShape)
+
+arbitraryContiguousWithShape :: (Storable t, Random t, Floating t) =>
+  Vector CInt -> Gen (Tensor t)
+arbitraryContiguousWithShape shape = do
   seed <- chooseAny
   case mkStdGen seed of {gen ->
     return $ fst $ randn shape gen
@@ -36,21 +66,17 @@ arbitraryWithShape shape = do
 arbitraryPairWithShape :: (Storable t, Random t, Floating t) =>
   Vector CInt -> Gen (Tensor t, Tensor t)
 arbitraryPairWithShape shape = do
-  seed <- chooseAny
-  case mkStdGen seed of {gen ->
-  case randn shape gen of {(x1, gen) ->
-    return (x1, fst $ randn shape gen)
-  }}
+  x1 <- arbitraryWithShape shape
+  x2 <- arbitraryWithShape shape
+  return (x1, x2)
 
 arbitraryBroadcastablePair :: (Storable t, Random t, Floating t) =>
   Gen (Tensor t, Tensor t)
 arbitraryBroadcastablePair = do
   (shape1, shape2) <- arbitraryBroadcastableShapes
-  seed <- chooseAny
-  case mkStdGen seed of {gen ->
-  case randn shape1 gen of {(x1, gen) ->
-    return (x1, fst $ randn shape2 gen)
-  }}
+  x1 <- arbitraryWithShape shape1
+  x2 <- arbitraryWithShape shape2
+  return (x1, x2)
 
 arbitraryBroadcastableShapes :: Gen (Vector CInt, Vector CInt)
 arbitraryBroadcastableShapes = do

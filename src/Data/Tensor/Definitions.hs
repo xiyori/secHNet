@@ -18,6 +18,10 @@ data (Storable t) =>
     tensorData :: !(Vector t)
   }
 
+-- | Typeclass for string representation of dtype.
+class (Storable t) => HasDtype t where
+  tensorDtype :: Tensor t -> String
+
 -- | Advanced indexer data type.
 type TensorIndex = [Tensor CInt]
 

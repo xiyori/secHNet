@@ -10,6 +10,7 @@ import Data.Tensor.Index
 import Data.Tensor as T
 
 import Foreign.C.Types
+import System.IO.Unsafe
 
 
 -- Functional
@@ -18,8 +19,10 @@ import Foreign.C.Types
 prop_tensor0 :: Index -> Bool
 prop_tensor0 shape = tensor shape (const (0 :: CFloat)) == zeros shape
 
-prop_tensor :: Tensor CFloat -> Bool
-prop_tensor x@(Tensor shape _ _ dat) = tensor shape (dat V.!) == x
+prop_tensor :: Index -> Gen Bool
+prop_tensor shape = do
+  x@(Tensor _ _ _ dat) <- arbitraryContiguousWithShape shape :: Gen (Tensor CFloat)
+  return $ tensor shape (dat V.!) == x
 
 prop_scalar :: CFloat -> Bool
 prop_scalar value = item (scalar value) == value
@@ -51,8 +54,10 @@ prop_elementwise_commutative = do
 prop_eq :: Tensor CFloat -> Bool
 prop_eq x = x == x
 
-prop_not_eq :: Tensor CFloat -> Tensor CFloat -> Bool
-prop_not_eq x1 x2 = x1 /= x2
+prop_not_eq :: Tensor CFloat -> Bool
+prop_not_eq x@(Tensor shape _ _ _)
+  | totalElems shape /= 0 = x /= (x + 1)
+  | otherwise             = True
 
 prop_allclose :: Tensor CFloat -> Bool
 prop_allclose x = allClose x x
@@ -122,7 +127,7 @@ prop_slice_end_equiv x@(Tensor shape _ _ _)
 
 prop_slice_negative :: Tensor CFloat -> Bool
 prop_slice_negative x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [-3:. -1] == x !: [V.head shape - 3:.V.head shape - 1]
+  | V.length shape > 0 = x !: [-3:. -1] == x !: [max 0 (V.head shape - 3):.V.head shape - 1]
   | otherwise          = True
 
 prop_slice_none :: Tensor CFloat -> Bool
@@ -265,9 +270,9 @@ prop_add_commutative = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
   return $ (x1 + x2) `allClose` (x2 + x1)
 
-prop_num_associative :: Gen Bool
-prop_num_associative = do
-  (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
+prop_num_associative :: Index -> Gen Bool
+prop_num_associative shape = do
+  (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CFloat, Tensor CFloat)
   return $ ((x1 + x2) * x2) `allClose` (x1 * x2 + x2 * x2)
 
 
@@ -292,9 +297,15 @@ prop_show_range =
   show (arange 0 1001 1 :: Tensor CFloat) ==
   "tensor([   0.,    1.,    2., ...,  998.,  999., 1000.])"
 
+prop_show_empty :: Bool
+prop_show_empty =
+  show (zeros (V.fromList [1, 2, 0]) :: Tensor CFloat) ==
+  "tensor([], shape=[1,2,0], dtype=float)"
+
 return []
 
 main :: IO ()
 main = do
   success <- $quickCheckAll
+  -- success <- $forAllProperties $ quickCheckWithResult (stdArgs {maxSuccess = 10000})
   unless success exitFailure
