@@ -19,15 +19,15 @@ instance (HasDtype t, Random t, Floating t) => Arbitrary (Tensor t) where
     shape <- arbitrary
     arbitraryWithShape shape
 
-instance Arbitrary (Vector CInt) where
-  arbitrary :: Gen (Vector CInt)
+instance Arbitrary Index where
+  arbitrary :: Gen Index
   arbitrary = do
     nDims <- chooseInt (0, 4)
     list <- vectorOf nDims $ chooseEnum (0, 10)
     return $ V.fromList list
 
 arbitraryWithShape :: (HasDtype t, Random t, Floating t) =>
-  Vector CInt -> Gen (Tensor t)
+  Index -> Gen (Tensor t)
 arbitraryWithShape shape = do
   isContiguous <- chooseAny
   if isContiguous then
@@ -42,6 +42,10 @@ arbitraryWithShape shape = do
     x <- arbitraryContiguousWithShape expandedShape
     return $ x !: slices
 
+-- arbitraryWithShape :: (HasDtype t, Random t, Floating t) =>
+--   Vector CInt -> Gen (Tensor t)
+-- arbitraryWithShape = arbitraryContiguousWithShape
+
 arbitrarySlices :: Index -> Index -> Gen Slices
 arbitrarySlices shape expandedShape =
   zipWithM (
@@ -53,10 +57,11 @@ arbitrarySlices shape expandedShape =
           -(start + 1) :. -(start + dim + 1) :| -1
         else
           start :. start + dim
-  ) (V.toList shape) (V.toList expandedShape)
+  ) (V.toList $ V.map fromIntegral shape)
+    (V.toList $ V.map fromIntegral expandedShape)
 
 arbitraryContiguousWithShape :: (HasDtype t, Random t, Floating t) =>
-  Vector CInt -> Gen (Tensor t)
+  Index -> Gen (Tensor t)
 arbitraryContiguousWithShape shape = do
   seed <- chooseAny
   case mkStdGen seed of {gen ->
@@ -64,7 +69,7 @@ arbitraryContiguousWithShape shape = do
   }
 
 arbitraryPairWithShape :: (HasDtype t, Random t, Floating t) =>
-  Vector CInt -> Gen (Tensor t, Tensor t)
+  Index -> Gen (Tensor t, Tensor t)
 arbitraryPairWithShape shape = do
   x1 <- arbitraryWithShape shape
   x2 <- arbitraryWithShape shape
@@ -78,7 +83,7 @@ arbitraryBroadcastablePair = do
   x2 <- arbitraryWithShape shape2
   return (x1, x2)
 
-arbitraryBroadcastableShapes :: Gen (Vector CInt, Vector CInt)
+arbitraryBroadcastableShapes :: Gen (Index, Index)
 arbitraryBroadcastableShapes = do
   shape <- arbitrary
   seed <- chooseAny

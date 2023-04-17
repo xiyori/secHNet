@@ -6,5 +6,5 @@ import qualified Data.Vector.Storable as V
 import Foreign
 import Foreign.C.Types
 
-sizeOfElem :: Storable t => Vector t -> CInt
+sizeOfElem :: Storable t => Vector t -> CSize
 sizeOfElem = fromIntegral . sizeOf . V.head

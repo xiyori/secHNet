@@ -17,12 +17,12 @@ data (HasDtype t) =>
     -- | Tensor shape.
     shape :: !Index,
     -- | Data stride in bytes, analogous to NumPy array stride.
-    tensorStride :: !Index,
+    tensorStride :: !Stride,
     -- | Data offset in bytes.
-    tensorOffset :: !CInt,
+    tensorOffset :: !CSize,
     -- | Internal data representation.
     tensorData :: !(Vector t)
   }
 
 -- | Advanced indexer data type.
-type TensorIndex = [Tensor CInt]
+type TensorIndex = [Tensor CLLong]

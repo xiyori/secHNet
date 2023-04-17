@@ -27,6 +27,7 @@ import qualified Language.C.Inline.Unsafe as CU
 C.context (C.baseCtx <> C.vecCtx)
 -- Include C utils.
 C.include "cbits/cbits.h"
+C.include "cbits/num_tensor.h"
 
 
 -- Construction
@@ -231,13 +232,13 @@ tensorEqual (Tensor shape stride1 offset1 dat1)
       toBool [CU.pure| int {
         equal(
           $vec-len:shape,
-          $vec-ptr:(int *shape),
-          $(int elemSize),
-          $vec-ptr:(int *stride1),
-          $(int offset1),
+          $vec-ptr:(size_t *shape),
+          $(size_t elemSize),
+          $vec-ptr:(long long *stride1),
+          $(size_t offset1),
           $vec-ptr:(char *data1CChar),
-          $vec-ptr:(int *stride2),
-          $(int offset2),
+          $vec-ptr:(long long *stride2),
+          $(size_t offset2),
           $vec-ptr:(char *data2CChar)
         )
       } |]
@@ -245,31 +246,31 @@ tensorEqual (Tensor shape stride1 offset1 dat1)
   | otherwise = False
 
 -- | Returns True if two arrays are element-wise equal within a tolerance.
-allCloseTol :: (HasDtype t, Floating t) => t -> t -> Tensor t -> Tensor t -> Bool
+allCloseTol :: (HasDtype t, Floating t) => CDouble -> CDouble -> Tensor t -> Tensor t -> Bool
 allCloseTol rtol atol
-  (Tensor shape stride1 offset1 dat1)
-  (Tensor shape2 stride2 offset2 dat2) = error "not implemented"
-  -- | shape == shape2 =
-  --   case sizeOfElem dat1 of {elemSize ->
-  --   case V.unsafeCast dat1 of {data1CChar ->
-  --   case V.unsafeCast dat2 of {data2CChar ->
-  --     toBool [CU.pure| int {
-  --       allclose_f(
-  --         $(float rtol),
-  --         $(float atol),
-  --         $vec-len:shape,
-  --         $vec-ptr:(int *shape),
-  --         $(int elemSize),
-  --         $vec-ptr:(int *stride1),
-  --         $(int offset1),
-  --         $vec-ptr:(char *data1CChar),
-  --         $vec-ptr:(int *stride2),
-  --         $(int offset2),
-  --         $vec-ptr:(char *data2CChar)
-  --       )
-  --     } |]
-  --   }}}
-  -- | otherwise = False
+  x1@(Tensor shape stride1 offset1 dat1)
+     (Tensor shape2 stride2 offset2 dat2)
+  | shape == shape2 =
+    case tensorDtype x1 of {dtype ->
+    case V.unsafeCast dat1 of {data1CChar ->
+    case V.unsafeCast dat2 of {data2CChar ->
+      toBool [CU.pure| int {
+        tensor_allclose(
+          $(double rtol),
+          $(double atol),
+          $vec-len:shape,
+          $vec-ptr:(size_t *shape),
+          $(int dtype),
+          $vec-ptr:(long long *stride1),
+          $(size_t offset1),
+          $vec-ptr:(char *data1CChar),
+          $vec-ptr:(long long *stride2),
+          $(size_t offset2),
+          $vec-ptr:(char *data2CChar)
+        )
+      } |]
+    }}}
+  | otherwise = False
 
 -- | Returns True if two arrays are element-wise equal within a default tolerance.
 allClose :: (HasDtype t, Floating t) => Tensor t -> Tensor t -> Bool
@@ -329,21 +330,21 @@ unsafeGetElem x@(Tensor shape stride offset dat) index =
     $ [CU.exp| char * {
         get_elem(
           $vec-len:shape,
-          $vec-ptr:(int *stride),
-          $(int offset),
+          $vec-ptr:(long long *stride),
+          $(size_t offset),
           $(int dtype),
           $vec-ptr:(char *dataCChar),
-          $vec-ptr:(int *index)
+          $vec-ptr:(size_t *index)
         )
       } |] >>= peek . castPtr
   }}
 
 -- | Get element of a tensor.
-(!) :: HasDtype t => Tensor t -> [CInt] -> t
+(!) :: HasDtype t => Tensor t -> [CLLong] -> t
 (!) x@(Tensor shape _ _ _) index =
   case normalizeIndex shape $ V.fromList index of {normIndex ->
     if validateIndex shape normIndex then
-      unsafeGetElem x normIndex
+      unsafeGetElem x $ V.map fromIntegral normIndex
     else
       error
       $ "incorrect index "
@@ -356,7 +357,7 @@ slice :: (HasDtype t) => Tensor t -> Slices -> Tensor t
 slice x@(Tensor shape stride offset dat) slices =
   case parseSlices shape slices of {(dimsToInsert, slices) ->
     insertDims (Tensor (V.fromList $ Prelude.map (
-      \ (start :. end :| step) -> (end - start) `div` step
+      \ (start :. end :| step) -> fromIntegral $ (end - start) `div` step
     ) $ filter (
       \case
         I _ -> False
@@ -375,9 +376,9 @@ slice x@(Tensor shape stride offset dat) slices =
       \ slice stride ->
         case slice of
           start :. end :| step ->
-            start * stride
+            fromIntegral $ start * stride
           I i ->
-            i * stride
+            fromIntegral $ i * stride
     ) slices $ V.toList stride) dat) dimsToInsert
   }
 
@@ -420,7 +421,7 @@ item x@(Tensor shape _ _ _)
 -- ----------------
 
 -- | Total number of elements in a tensor.
-numel :: (HasDtype t) => Tensor t -> CInt
+numel :: (HasDtype t) => Tensor t -> CSize
 numel (Tensor shape _ _ _) = totalElems shape
 
 -- | Sum elements of a tensor.
@@ -430,9 +431,9 @@ sum (Tensor shape stride offset dat) = error "not implemented"
   --   [CU.pure| float {
   --     sum_f(
   --       $vec-len:shape,
-  --       $vec-ptr:(int *shape),
-  --       $vec-ptr:(int *stride),
-  --       $(int offset),
+  --       $vec-ptr:(size_t *shape),
+  --       $vec-ptr:(long long *stride),
+  --       $(size_t offset),
   --       $vec-ptr:(char *dataCChar)
   --     )
   --   } |]
@@ -458,10 +459,10 @@ copy (Tensor shape stride offset dat) =
           [CU.exp| void {
             copy(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
-              $(int elemSize),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
+              $(size_t elemSize),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
             )
@@ -485,7 +486,7 @@ flatten :: (HasDtype t) => Tensor t -> Tensor t
 flatten x =
   case copy x of {(Tensor shape stride offset dat) ->
     Tensor (V.singleton $ totalElems shape)
-      (V.singleton $ sizeOfElem dat) offset dat
+      (V.singleton $ fromIntegral $ sizeOfElem dat) offset dat
   }
 
 -- | Give a new shape to a tensor without changing its data.

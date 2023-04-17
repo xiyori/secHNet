@@ -80,7 +80,7 @@ prop_getelem_single = single (0 :: CFloat) ! [0] == 0
 
 prop_slice_index :: Tensor CFloat -> Bool
 prop_slice_index x@(Tensor shape _ _ _)
-  | totalElems shape /= 0 = x ! replicate (V.length shape) 0 == item (x !: replicate (V.length shape) (I 0))
+  | totalElems shape /= 0 = scalar (x ! replicate (V.length shape) 0) == x !: replicate (V.length shape) (I 0)
   | otherwise             = True
 
 prop_slice_single :: Tensor CFloat -> Bool
@@ -109,25 +109,26 @@ prop_slice_start1_all x@(Tensor shape _ _ _)
 
 prop_slice_start_equiv :: Tensor CFloat -> Bool
 prop_slice_start_equiv x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [S 1] == x !: [1:.V.head shape]
+  | V.length shape > 0 = x !: [S 1] == x !: [1:.fromIntegral (V.head shape)]
   | otherwise          = True
 
 prop_slice_end_all :: Tensor CFloat -> Bool
-prop_slice_end_all x@(Tensor shape _ _ _) = x !: Prelude.map E (V.toList shape) == x
+prop_slice_end_all x@(Tensor shape _ _ _) = x !: Prelude.map (E . fromIntegral) (V.toList shape) == x
 
 prop_slice_end1_all :: Tensor CFloat -> Bool
 prop_slice_end1_all x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [E $ V.head shape] == x
+  | V.length shape > 0 = x !: [E $ fromIntegral (V.head shape)] == x
   | otherwise          = True
 
 prop_slice_end_equiv :: Tensor CFloat -> Bool
 prop_slice_end_equiv x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [E (-1)] == x !: [0:.V.head shape - 1]
+  | V.length shape > 0 = x !: [E (-1)] == x !: [0:. fromIntegral (V.head shape) - 1]
   | otherwise          = True
 
 prop_slice_negative :: Tensor CFloat -> Bool
 prop_slice_negative x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [-3:. -1] == x !: [max 0 (V.head shape - 3):.V.head shape - 1]
+  | V.length shape > 0 =
+    x !: [-3:. -1] == x !: [max 0 (fromIntegral (V.head shape) - 3):.fromIntegral (V.head shape) - 1]
   | otherwise          = True
 
 prop_slice_none :: Tensor CFloat -> Bool
@@ -272,7 +273,7 @@ prop_add_commutative = do
 
 prop_num_associative :: Index -> Gen Bool
 prop_num_associative shape = do
-  (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CFloat, Tensor CFloat)
+  (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CDouble, Tensor CDouble)
   return $
     -- unsafePerformIO $ print (((x1 + x2) * x2) - (x1 * x2 + x2 * x2)) >>
      (((x1 + x2) * x2) `allClose` (x1 * x2 + x2 * x2))

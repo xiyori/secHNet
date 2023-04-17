@@ -10,26 +10,29 @@ import System.IO.Unsafe
 import Foreign
 import Foreign.C.Types
 
--- | Tensor index @Vector CInt@.
-type Index = Vector CInt
+-- | Tensor index @Vector CSize@.
+type Index = Vector CSize
+
+-- | Tensor stride @Vector CLLong@.
+type Stride = Vector CLLong
 
 -- | Slice data type.
 data Slice
   -- | Single index @I index@.
-  = I CInt
+  = I CLLong
   -- | Full slice, analogous to NumPy @:@.
   | A
   -- | Slice from start, analogous to NumPy @start:@.
-  | S CInt
+  | S CLLong
   -- | Slice till end, analogous to NumPy @:end@.
-  | E CInt
-  | CInt  -- | Slice @start :. end@, analogous to
+  | E CLLong
+  | CLLong  -- | Slice @start :. end@, analogous to
           --   NumPy @start:end@.
-          :. CInt
+          :. CLLong
   | Slice -- | Slice @S start :| step@, @E end :| step@
           --   or @start :. end :| step@, analogous to
           --   NumPy @start:end:step@.
-          :| CInt
+          :| CLLong
   -- | Insert new dim, analogous to NumPy @None@.
   | None
   -- | Ellipses, analogous to NumPy @...@.
@@ -49,48 +52,48 @@ parseShape1 listData = V.singleton $ fromIntegral $ length listData
 -- | Coefficients for index flattening.
 --
 --   Signature: @sizeOfElem -> shape -> stride@
-computeStride :: CInt -> Index -> Index
+computeStride :: CSize -> Index -> Stride
 computeStride sizeOfElem shape =
   case V.length shape of {len ->
     constructrN len (
       \ accum ->
         if V.null accum then
-          sizeOfElem
-        else shape ! (len - V.length accum) * V.head accum
+          fromIntegral sizeOfElem
+        else fromIntegral (shape ! (len - V.length accum)) * V.head accum
     )
   }
 
 -- | Parse negative index value.
 --
 --   Signature: @dim -> i -> normI@
-normalizeItem :: (Num t, Ord t) => t -> t -> t
+normalizeItem :: (Integral a, Integral b) => a -> b -> b
 normalizeItem dim i =
   if i < 0 then
     if dim == 0 && i == -1 then
       0
-    else dim + i
+    else fromIntegral dim + i
   else i
 
 -- | Parse negative index values.
 --
 --   Signature: @shape -> index -> normIndex@
-normalizeIndex :: Index -> Index -> Index
+normalizeIndex :: Index -> Vector CLLong -> Vector CLLong
 normalizeIndex = V.zipWith normalizeItem
 
 -- | Total number of elements in a tensor with shape @shape@.
 --
 --   Signature: @shape -> numel@
-totalElems :: Index -> CInt
+totalElems :: Index -> CSize
 totalElems = V.foldl' (*) 1
 
 -- | Validate index correctness.
 --
 --   Signature: @shape -> index -> isValid@
-validateIndex :: Index -> Index -> Bool
+validateIndex :: Index -> Vector CLLong -> Bool
 validateIndex shape index
   | V.length shape /= V.length index  = False
-  | V.or $ V.zipWith (>=) index shape = False
   | V.any (< 0) index                 = False
+  | V.or $ V.zipWith ((>=) . fromIntegral) index shape = False
   | otherwise                         = True
 
 -- | Determine if two shapes can be broadcasted.
@@ -109,7 +112,7 @@ verifyBroadcastable shape1 shape2 =
 --   Signature: @shape1 -> shape2 -> stride1 -> stride2 ->
 --                (shape1, shape2, stride1, stride2)@
 broadcastShapesStrides ::
-  Index -> Index -> Index -> Index -> (Index, Index, Index, Index)
+  Index -> Index -> Stride -> Stride -> (Index, Index, Stride, Stride)
 broadcastShapesStrides shape1 shape2 stride1 stride2 =
   case V.length shape1 of {nDims1 ->
   case V.length shape2 of {nDims2 ->
@@ -138,7 +141,7 @@ allEqual xs = all (== head xs) $ tail xs
 -- | Swap index dimensions.
 --
 --   Signature: @index -> dim1 -> dim2 -> swappedIndex@
-swapElementsAt :: Index -> Int -> Int -> Index
+swapElementsAt :: (Storable t) => Vector t -> Int -> Int -> Vector t
 swapElementsAt index dim1 dim2 =
   index // [(dim1, index ! dim2), (dim2, index ! dim1)]
 
@@ -182,8 +185,8 @@ parseEllipses nDims slices =
 
 -- | Parse negative slice values.
 --
---   Signature: @i -> dim -> slice -> normSlice@
-normalizeSlice :: Int -> CInt -> Slice -> CInt -> Slice
+--   Signature: @i -> dim -> slice -> step -> normSlice@
+normalizeSlice :: Int -> CLLong -> Slice -> CLLong -> Slice
 normalizeSlice axis dim (I i) step =
   case normalizeItem dim i of {normI ->
     if 0 <= normI && normI < dim then
@@ -251,9 +254,9 @@ parseSlices shape slices =
         \ axis dim slice ->
           case slice of
             slice :| step ->
-              normalizeSlice axis dim slice step
+              normalizeSlice axis (fromIntegral dim) slice step
             _ ->
-              normalizeSlice axis dim slice 1
+              normalizeSlice axis (fromIntegral dim) slice 1
       ) [0 .. V.length shape - 1]
       (V.toList shape) slices)
     else

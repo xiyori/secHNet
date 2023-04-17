@@ -21,8 +21,6 @@ import qualified Language.C.Inline.Unsafe as CU
 
 -- Use vector anti-quoters.
 C.context (C.baseCtx <> C.vecCtx)
--- Include C headers.
-C.include "<math.h>"
 -- Include C utils.
 C.include "cbits/num_tensor.h"
 
@@ -87,13 +85,13 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
           [CU.exp| void {
             tensor_add(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
+              $vec-ptr:(size_t *shape),
               $(int dtype),
-              $vec-ptr:(int *stride1),
-              $(int offset1),
+              $vec-ptr:(long long *stride1),
+              $(size_t offset1),
               $vec-ptr:(char *data1CChar),
-              $vec-ptr:(int *stride2),
-              $(int offset2),
+              $vec-ptr:(long long *stride2),
+              $(size_t offset2),
               $vec-ptr:(char *data2CChar),
               $vec-ptr:(char *mutableDataCChar)
             )
@@ -118,13 +116,13 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
           [CU.exp| void {
             tensor_sub(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
+              $vec-ptr:(size_t *shape),
               $(int dtype),
-              $vec-ptr:(int *stride1),
-              $(int offset1),
+              $vec-ptr:(long long *stride1),
+              $(size_t offset1),
               $vec-ptr:(char *data1CChar),
-              $vec-ptr:(int *stride2),
-              $(int offset2),
+              $vec-ptr:(long long *stride2),
+              $(size_t offset2),
               $vec-ptr:(char *data2CChar),
               $vec-ptr:(char *mutableDataCChar)
             )
@@ -149,13 +147,13 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
           [CU.exp| void {
             tensor_mult(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
+              $vec-ptr:(size_t *shape),
               $(int dtype),
-              $vec-ptr:(int *stride1),
-              $(int offset1),
+              $vec-ptr:(long long *stride1),
+              $(size_t offset1),
               $vec-ptr:(char *data1CChar),
-              $vec-ptr:(int *stride2),
-              $(int offset2),
+              $vec-ptr:(long long *stride2),
+              $(size_t offset2),
               $vec-ptr:(char *data2CChar),
               $vec-ptr:(char *mutableDataCChar)
             )
@@ -175,9 +173,9 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
           [CU.exp| void {
             tensor_neg(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -198,9 +196,9 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
           [CU.exp| void {
             tensor_abs(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -221,9 +219,9 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
           [CU.exp| void {
             tensor_sign(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -258,13 +256,13 @@ instance (HasDtype t, Fractional t) => Fractional (Tensor t) where
           [CU.exp| void {
             tensor_div(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
+              $vec-ptr:(size_t *shape),
               $(int dtype),
-              $vec-ptr:(int *stride1),
-              $(int offset1),
+              $vec-ptr:(long long *stride1),
+              $(size_t offset1),
               $vec-ptr:(char *data1CChar),
-              $vec-ptr:(int *stride2),
-              $(int offset2),
+              $vec-ptr:(long long *stride2),
+              $(size_t offset2),
               $vec-ptr:(char *data2CChar),
               $vec-ptr:(char *mutableDataCChar)
             )
@@ -290,9 +288,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_exp(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -313,9 +311,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_log(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -336,9 +334,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_sin(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -359,9 +357,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_cos(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -382,9 +380,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_asin(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -405,9 +403,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_acos(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -428,9 +426,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_atan(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -451,9 +449,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_sinh(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -474,9 +472,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_cosh(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -497,9 +495,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_asinh(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -520,9 +518,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_acosh(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -543,9 +541,9 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
           [CU.exp| void {
             tensor_atanh(
               $vec-len:shape,
-              $vec-ptr:(int *shape),
-              $vec-ptr:(int *stride),
-              $(int offset),
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
               $(int dtype),
               $vec-ptr:(char *dataCChar),
               $vec-ptr:(char *mutableDataCChar)
@@ -568,6 +566,19 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
 
 instance (HasDtype t, Show t) => Show (Tensor t) where
   show x@(Tensor shape _ _ _)
+    -- Debug show
+    | True =
+      "tensor("
+      ++ show (V.take 3 $ tensorData x)
+      ++ ", shape="
+      ++ show shape
+      ++ ", stride="
+      ++ show (tensorStride x)
+      ++ ", offset="
+      ++ show (tensorOffset x)
+      ++ ", dtype="
+      ++ showDtype x
+      ++ ")"
     -- Print info about empty tensor
     | totalElems shape == 0 =
       "tensor([], shape="
@@ -602,7 +613,7 @@ instance (HasDtype t, Show t) => Show (Tensor t) where
         | dim < nDims =
           maximum $ Prelude.map (maxLengthAll . (
             \ i -> index ++ [i]
-          )) [0 .. (shape V.! dim) - 1]
+          )) [0 .. fromIntegral (shape V.! dim) - 1]
         | otherwise = length $ showCompact $ x ! index
         where
           dim = length index
@@ -617,7 +628,7 @@ instance (HasDtype t, Show t) => Show (Tensor t) where
           ++ "["
           ++ concatMap (goAll fLength (prefix ++ " ") . (
             \ i -> index ++ [i]
-          )) [0 .. (shape V.! dim) - 1]
+          )) [0 .. fromIntegral (shape V.! dim) - 1]
           ++ "]"
         | otherwise =
           let strElem = showCompact (x ! index)
@@ -639,9 +650,9 @@ instance (HasDtype t, Show t) => Show (Tensor t) where
           maximum $ Prelude.map (maxLengthPart . (
             \ i -> index ++ [i]
           )) $
-          if shape V.! dim > nPart * 2 then
+          if fromIntegral (shape V.! dim) > nPart * 2 then
             [0 .. nPart - 1] ++ [-nPart .. -1]
-          else [0 .. (shape V.! dim) - 1]
+          else [0 .. fromIntegral (shape V.! dim) - 1]
         | otherwise = length $ showCompact $ x ! index
         where
           dim = length index
@@ -665,10 +676,10 @@ instance (HasDtype t, Show t) => Show (Tensor t) where
           ++ concatMap (goPart fLength (prefix ++ " ") . (
             \ i -> index ++ [i]
           )) (
-            if shape V.! dim > nPart * 2 then
+            if fromIntegral (shape V.! dim) > nPart * 2 then
               [0 .. nPart - 1] ++ [ldots] ++ [-nPart .. -1]
             else
-              [0 .. (shape V.! dim) - 1]
+              [0 .. fromIntegral (shape V.! dim) - 1]
           ) ++ "]"
         | otherwise =
           let strElem = showCompact (x ! index)
