@@ -1,4 +1,4 @@
-# Autograd and Neural Network Library on Haskell
+# Autograd and Neural Network Library in Haskell
 
 **Key features**
 
