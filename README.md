@@ -8,3 +8,4 @@
 + *A wide variety of optimizers (TODO)*
 + *Simple training process (TODO)*
 + *Comprehensible usage manual (TODO)*
++ *QuickCheck CI*
