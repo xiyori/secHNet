@@ -3,6 +3,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.Tensor.Functional where
 
@@ -143,33 +144,28 @@ onesLike (Tensor shape _ _ _) = full shape 1
 --   and a negative value to a lower diagonal.
 --
 --   Signature: @rows -> columns -> diagonalIndex -> tensor@
-eye :: (HasDtype t, Num t) => CInt -> CInt -> CInt -> Tensor t
-eye rows columns diagonalIndex = error "not implemented"
-  -- Tensor (V.fromList [rows, columns])
-  -- (V.fromList [columns * 4, 4]) 0
-  -- $ unsafePerformIO
-  -- $ do
-  --   mutableData <- VM.new $ fromIntegral $ rows * columns
-  --   [CU.exp| void {
-  --     eye_f(
-  --       $(int rows),
-  --       $(int columns),
-  --       $(int diagonalIndex),
-  --       $vec-ptr:(float *mutableData)
-  --     )
-  --   } |]
-  --   V.unsafeFreeze mutableData
-
--- | Return evenly spaced values within a given interval.
---
---   Example: @arange 0 3 1 = tensor([0, 1, 2])@
---
---   Signature: @low -> high -> step -> tensor@
-arange :: (HasDtype t, Num t) => t -> t -> t -> Tensor t
-arange low high step = error "not implemented"
-  -- tensor (V.singleton $ floor $ (high - low) / step) (
-  --   \ fIndex -> low + step * fromIntegral fIndex
-  -- )
+eye :: forall t. (HasDtype t, Num t) => CSize -> CSize -> CLLong -> Tensor t
+eye rows columns diagonalIndex =
+  case scalar 0 :: Tensor t of {sampleTensor ->
+  case tensorDtype sampleTensor of {dtype ->
+  case V.fromList [rows, columns] of {shape ->
+    Tensor shape (computeStride (sizeOfElem $ tensorData sampleTensor) shape) 0
+    $ unsafePerformIO
+    $ do
+      mutableData <- VM.new $ fromIntegral $ rows * columns
+      case VM.unsafeCast mutableData of {mutableDataCChar ->
+        [CU.exp| void {
+          tensor_eye(
+            $(size_t rows),
+            $(size_t columns),
+            $(long long diagonalIndex),
+            $(int dtype),
+            $vec-ptr:(char *mutableDataCChar)
+          )
+        } |]
+      }
+      V.unsafeFreeze mutableData
+  }}}
 
 
 -- Binary operations
@@ -424,20 +420,86 @@ item x@(Tensor shape _ _ _)
 numel :: (HasDtype t) => Tensor t -> CSize
 numel (Tensor shape _ _ _) = totalElems shape
 
+-- | Minimum value of a tensor.
+min :: (HasDtype t, Ord t) => Tensor t -> t
+min x@(Tensor shape stride offset dat)
+  | totalElems shape /= 0 =
+    case V.unsafeCast dat of {dataCChar ->
+    case tensorDtype x of {dtype ->
+      unsafePerformIO
+      $ allocaBytes (fromIntegral $ sizeOfElem dat) (
+        \ outCCharPtr -> do
+          [CU.exp| void {
+            tensor_min(
+              $vec-len:shape,
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $(char *outCCharPtr)
+            )
+          } |]
+          case castPtr outCCharPtr of {outPtr ->
+            peek outPtr
+          }
+      )
+    }}
+  | otherwise =
+    error "zero-size array to reduction operation minimum which has no identity"
+
+-- | Maximum value of a tensor.
+max :: (HasDtype t, Ord t) => Tensor t -> t
+max x@(Tensor shape stride offset dat)
+  | totalElems shape /= 0 =
+    case V.unsafeCast dat of {dataCChar ->
+    case tensorDtype x of {dtype ->
+      unsafePerformIO
+      $ allocaBytes (fromIntegral $ sizeOfElem dat) (
+        \ outCCharPtr -> do
+          [CU.exp| void {
+            tensor_max(
+              $vec-len:shape,
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $(char *outCCharPtr)
+            )
+          } |]
+          case castPtr outCCharPtr of {outPtr ->
+            peek outPtr
+          }
+      )
+    }}
+  | otherwise =
+    error "zero-size array to reduction operation maximum which has no identity"
+
 -- | Sum elements of a tensor.
 sum :: (HasDtype t, Num t) => Tensor t -> t
-sum (Tensor shape stride offset dat) = error "not implemented"
-  -- case V.unsafeCast dat of {dataCChar ->
-  --   [CU.pure| float {
-  --     sum_f(
-  --       $vec-len:shape,
-  --       $vec-ptr:(size_t *shape),
-  --       $vec-ptr:(long long *stride),
-  --       $(size_t offset),
-  --       $vec-ptr:(char *dataCChar)
-  --     )
-  --   } |]
-  -- }
+sum x@(Tensor shape stride offset dat) =
+  case V.unsafeCast dat of {dataCChar ->
+  case tensorDtype x of {dtype ->
+    unsafePerformIO
+    $ allocaBytes (fromIntegral $ sizeOfElem dat) (
+      \ outCCharPtr -> do
+        [CU.exp| void {
+          tensor_sum(
+            $vec-len:shape,
+            $vec-ptr:(size_t *shape),
+            $vec-ptr:(long long *stride),
+            $(size_t offset),
+            $(int dtype),
+            $vec-ptr:(char *dataCChar),
+            $(char *outCCharPtr)
+          )
+        } |]
+        case castPtr outCCharPtr of {outPtr ->
+          peek outPtr
+        }
+    )
+  }}
 
 -- | Take a mean of elements in a tensor.
 mean :: (HasDtype t, Fractional t) => Tensor t -> t
@@ -669,7 +731,6 @@ foldr' f accum x =
 {-# INLINE randn #-}
 {-# INLINE randnM #-}
 {-# INLINE eye #-}
-{-# INLINE arange #-}
 
 {-# INLINE broadcast #-}
 -- {-# INLINE dot #-}

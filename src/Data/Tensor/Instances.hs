@@ -65,6 +65,51 @@ instance HasDtype CDouble where
   tensorDtype _ = 11
   showDtype _ = "float64"
 
+_rangeF :: (HasDtype t, RealFrac t) => t -> t -> t -> Tensor t
+_rangeF low high step =
+  tensor (V.singleton $ floor $ (high - low) / step) (
+    \ fIndex -> low + step * fromIntegral fIndex
+  )
+
+_rangeI :: (HasDtype t, Integral t) => t -> t -> t -> Tensor t
+_rangeI low high step =
+  tensor (V.singleton $ fromIntegral $ (high - low) `div` step) (
+    \ fIndex -> low + step * fromIntegral fIndex
+  )
+
+{-# INLINE _rangeF #-}
+{-# INLINE _rangeI #-}
+
+instance HasArange CChar where
+  arange = _rangeI
+
+instance HasArange CUChar where
+  arange = _rangeI
+
+instance HasArange CShort where
+  arange = _rangeI
+
+instance HasArange CUShort where
+  arange = _rangeI
+
+instance HasArange CInt where
+  arange = _rangeI
+
+instance HasArange CUInt where
+  arange = _rangeI
+
+instance HasArange CLLong where
+  arange = _rangeI
+
+instance HasArange CULLong where
+  arange = _rangeI
+
+instance HasArange CFloat where
+  arange = _rangeF
+
+instance HasArange CDouble where
+  arange = _rangeF
+
 instance HasDtype t => Eq (Tensor t) where
   (==) = tensorEqual
 
@@ -567,18 +612,18 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
 instance (HasDtype t, Show t) => Show (Tensor t) where
   show x@(Tensor shape _ _ _)
     -- Debug show
-    | True =
-      "tensor("
-      ++ show (V.take 3 $ tensorData x)
-      ++ ", shape="
-      ++ show shape
-      ++ ", stride="
-      ++ show (tensorStride x)
-      ++ ", offset="
-      ++ show (tensorOffset x)
-      ++ ", dtype="
-      ++ showDtype x
-      ++ ")"
+    -- | True =
+    --   "tensor("
+    --   ++ show (V.take 3 $ tensorData x)
+    --   ++ ", shape="
+    --   ++ show shape
+    --   ++ ", stride="
+    --   ++ show (tensorStride x)
+    --   ++ ", offset="
+    --   ++ show (tensorOffset x)
+    --   ++ ", dtype="
+    --   ++ showDtype x
+    --   ++ ")"
     -- Print info about empty tensor
     | totalElems shape == 0 =
       "tensor([], shape="

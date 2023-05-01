@@ -128,7 +128,7 @@ prop_slice_end_equiv x@(Tensor shape _ _ _)
 prop_slice_negative :: Tensor CFloat -> Bool
 prop_slice_negative x@(Tensor shape _ _ _)
   | V.length shape > 0 =
-    x !: [-3:. -1] == x !: [max 0 (fromIntegral (V.head shape) - 3):.fromIntegral (V.head shape) - 1]
+    x !: [-3:. -1] == x !: [Prelude.max 0 (fromIntegral (V.head shape) - 3):.fromIntegral (V.head shape) - 1]
   | otherwise          = True
 
 prop_slice_none :: Tensor CFloat -> Bool
@@ -237,8 +237,22 @@ prop_arange shape
 prop_arange_neg :: Index -> Bool
 prop_arange_neg shape
   | totalElems shape /= 0 =
-    flatten (tensor shape fromIntegral) `allClose`
-    (-arange (0 :: CFloat) (fromIntegral $ -totalElems shape) (-1))
+    flatten (tensor shape $ negate . fromIntegral) `allClose`
+    arange (0 :: CFloat) (-(fromIntegral $ totalElems shape)) (-1)
+  | otherwise =
+    True
+
+prop_min :: Tensor CDouble -> Bool
+prop_min x
+  | numel x /= 0 =
+    T.min x == T.foldl' Prelude.min (1 / 0) x
+  | otherwise =
+    True
+
+prop_max :: Tensor CDouble -> Bool
+prop_max x
+  | numel x /= 0 =
+    T.max x == T.foldl' Prelude.max (-1 / 0) x
   | otherwise =
     True
 
@@ -247,8 +261,20 @@ prop_sum shape = T.sum (ones shape :: Tensor CFloat) == fromIntegral (totalElems
 
 prop_sum_distributive :: Index -> Gen Bool
 prop_sum_distributive shape = do
-  (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CFloat, Tensor CFloat)
+  (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CDouble, Tensor CDouble)
   return $ scalar (T.sum x1 + T.sum x2) `allClose` scalar (T.sum (x1 + x2))
+
+prop_sum_empty :: Index -> Bool
+prop_sum_empty shape = T.sum (ones $ V.snoc shape 0) == (0 :: CFloat)
+
+prop_sum_scalar :: Bool
+prop_sum_scalar = T.sum (scalar 1) == (1 :: CFloat)
+
+prop_sum_single :: Bool
+prop_sum_single = T.sum (single 1) == (1 :: CFloat)
+
+prop_mean_empty :: Index -> Bool
+prop_mean_empty shape = isNaN $ T.mean (ones $ V.snoc shape 0 :: Tensor CFloat)
 
 prop_abs :: Index -> Bool
 prop_abs shape = abs x == x
@@ -292,6 +318,14 @@ prop_show_eye :: Bool
 prop_show_eye =
   show (eye 3 3 0 :: Tensor CFloat) ==
   "tensor([[1., 0., 0.],\n" ++
+  "        [0., 1., 0.],\n" ++
+  "        [0., 0., 1.]])"
+
+prop_show_eye_shift :: Bool
+prop_show_eye_shift =
+  show (eye 4 3 (-1) :: Tensor CFloat) ==
+  "tensor([[0., 0., 0.],\n" ++
+  "        [1., 0., 0.],\n" ++
   "        [0., 1., 0.],\n" ++
   "        [0., 0., 1.]])"
 

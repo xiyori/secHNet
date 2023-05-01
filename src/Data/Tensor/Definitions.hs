@@ -11,6 +11,14 @@ class (Storable t) => HasDtype t where
 
   showDtype :: Tensor t -> String
 
+class (HasDtype t, Num t) => HasArange t where
+  -- | Return evenly spaced values within a given interval.
+  --
+  --   Example: @arange 0 3 1 = tensor([0, 1, 2])@
+  --
+  --   Signature: @low -> high -> step -> tensor@
+  arange :: t -> t -> t -> Tensor t
+
 -- | Tensor data type.
 data (HasDtype t) =>
   Tensor t = Tensor {

@@ -1,5 +1,6 @@
-- [ ] EYE macro
-- [ ] FOLD macro for sum, min, max, ...
+- [x] EYE macro
+- [x] arange
+- [x] FOLD macro for sum, min, max, ...
 - [ ] fromList2, fromList3, ... 6
 - [ ] sumAlongSim
 - [ ] shape and indexing unification?

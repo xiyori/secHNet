@@ -1,2 +1,4 @@
 /dist-newstyle
 /data
+.vscode
+*.prof

@@ -5,29 +5,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#define SIZEOF_AVX512 32
-
-#define VECTORIZED_SIZE_int8 \
-SIZEOF_AVX512
-#define VECTORIZED_SIZE_uint8 \
-SIZEOF_AVX512
-#define VECTORIZED_SIZE_int16 \
-SIZEOF_AVX512 / 2
-#define VECTORIZED_SIZE_uint16 \
-SIZEOF_AVX512 / 2
-#define VECTORIZED_SIZE_int32 \
-SIZEOF_AVX512 / 4
-#define VECTORIZED_SIZE_uint32 \
-SIZEOF_AVX512 / 4
-#define VECTORIZED_SIZE_int64 \
-SIZEOF_AVX512 / 8
-#define VECTORIZED_SIZE_uint64 \
-SIZEOF_AVX512 / 8
-#define VECTORIZED_SIZE_float32 \
-SIZEOF_AVX512 / 4
-#define VECTORIZED_SIZE_float64 \
-SIZEOF_AVX512 / 8
-
 #define ADVANCE_INDEX(n_dims) \
 for (int dim = n_dims - 1; dim >= 0; --dim) { \
     index[dim] += 1; \
@@ -53,6 +30,64 @@ for (int dim = n_dims - 1; dim >= 0; --dim) { \
         break; \
     } \
 }
+
+#define SIZEOF_AVX512 32
+
+#define INT8_VECTORIZED_SIZE \
+SIZEOF_AVX512
+#define UINT8_VECTORIZED_SIZE \
+SIZEOF_AVX512
+#define INT16_VECTORIZED_SIZE \
+SIZEOF_AVX512 / 2
+#define UINT16_VECTORIZED_SIZE \
+SIZEOF_AVX512 / 2
+#define INT32_VECTORIZED_SIZE \
+SIZEOF_AVX512 / 4
+#define UINT32_VECTORIZED_SIZE \
+SIZEOF_AVX512 / 4
+#define INT64_VECTORIZED_SIZE \
+SIZEOF_AVX512 / 8
+#define UINT64_VECTORIZED_SIZE \
+SIZEOF_AVX512 / 8
+#define FLOAT32_VECTORIZED_SIZE \
+SIZEOF_AVX512 / 4
+#define FLOAT64_VECTORIZED_SIZE \
+SIZEOF_AVX512 / 8
+
+#define VECTORIZED_SIZE(dtype) \
+VECTORIZED_SIZE_(DTYPE_UPPER(dtype))
+#define VECTORIZED_SIZE_(uppercase_dtype) \
+CONCATENATE(uppercase_dtype, _VECTORIZED_SIZE)
+
+#define UINT8_MIN 0
+#define UINT16_MIN 0
+#define UINT32_MIN 0
+#define UINT64_MIN 0
+
+#define MIN_VALUE(int_dtype) \
+MIN_VALUE_(DTYPE_UPPER(int_dtype))
+#define MIN_VALUE_(uppercase_dtype) \
+CONCATENATE(uppercase_dtype, _MIN)
+
+#define MAX_VALUE(int_dtype) \
+MAX_VALUE_(DTYPE_UPPER(int_dtype))
+#define MAX_VALUE_(uppercase_dtype) \
+CONCATENATE(uppercase_dtype, _MAX)
+
+#define CONCATENATE(a, b) a##b
+
+#define DTYPE_UPPER(dtype) DTYPE_UPPER_##dtype
+
+#define DTYPE_UPPER_int8 INT8
+#define DTYPE_UPPER_uint8 UINT8
+#define DTYPE_UPPER_int16 INT16
+#define DTYPE_UPPER_uint16 UINT16
+#define DTYPE_UPPER_int32 INT32
+#define DTYPE_UPPER_uint32 UINT32
+#define DTYPE_UPPER_int64 INT64
+#define DTYPE_UPPER_uint64 UINT64
+#define DTYPE_UPPER_float32 FLOAT32
+#define DTYPE_UPPER_float64 FLOAT64
 
 
 // typedef ? bool_t;

@@ -1,8 +1,10 @@
 #include "num_tensor.h"
 
-// #include <stdio.h>
 
-#define FORALL_DTYPES(expr, ...) \
+// -- Common
+// -- ------
+
+#define FORALL_INT_DTYPES(expr, ...) \
 expr(int8, __VA_ARGS__) \
 expr(uint8, __VA_ARGS__) \
 expr(int16, __VA_ARGS__) \
@@ -10,24 +12,44 @@ expr(uint16, __VA_ARGS__) \
 expr(int32, __VA_ARGS__) \
 expr(uint32, __VA_ARGS__) \
 expr(int64, __VA_ARGS__) \
-expr(uint64, __VA_ARGS__) \
-expr(float32, __VA_ARGS__) \
-expr(float64, __VA_ARGS__)
+expr(uint64, __VA_ARGS__)
 
 #define FORALL_FLOAT_DTYPES(expr, ...) \
 expr(float32, __VA_ARGS__) \
 expr(float64, __VA_ARGS__)
 
-#define ANY_FLOAT_FUNC(macro, name) \
-macro(float32, name, name##f) \
-macro(float64, name, name) \
-\
+#define FORALL_DTYPES(expr, ...) \
+FORALL_INT_DTYPES(expr, __VA_ARGS__) \
+FORALL_FLOAT_DTYPES(expr, __VA_ARGS__)
+
+#define FUNC_WRAPPER(dtype_iterator, macro, name) \
 macro##_PROTO(name) \
 { \
     switch(dtype) { \
-        FORALL_FLOAT_DTYPES(macro##_CASE, name) \
+        dtype_iterator(macro##_CASE, name) \
     } \
 }
+
+#define FUNC(macro, name, function) \
+FORALL_DTYPES(macro, name, function) \
+\
+FUNC_WRAPPER(FORALL_DTYPES, macro, name)
+
+#define FUNC_INT_FLOAT(macro, name, function) \
+FORALL_INT_DTYPES(macro, name, function##_INT) \
+FORALL_FLOAT_DTYPES(macro, name, function##_FLOAT) \
+\
+FUNC_WRAPPER(FORALL_DTYPES, macro, name)
+
+#define FUNC_MATH(macro, name) \
+macro(float32, name, name##f) \
+macro(float64, name, name) \
+\
+FUNC_WRAPPER(FORALL_FLOAT_DTYPES, macro, name)
+
+
+// -- Map
+// -- ---
 
 #define MAP(dtype, name, function) \
 void \
@@ -57,7 +79,7 @@ name##_##dtype ( \
             char *current_dat_to = dat_to + i * last_dim; \
             char *current_dat_from = dat_from + f_index; \
             for (size_t j = 0; j < last_dim / SIZEOF_AVX512; ++j) { \
-                for (size_t k = 0; k < VECTORIZED_SIZE_##dtype; ++k) { \
+                for (size_t k = 0; k < VECTORIZED_SIZE(dtype); ++k) { \
                     ((dtype##_t *) current_dat_to)[k] = function( \
                         ((dtype##_t *) current_dat_from)[k] \
                     ); \
@@ -70,16 +92,6 @@ name##_##dtype ( \
                 ((dtype##_t *) current_dat_to)[k] = function( \
                     ((dtype##_t *) current_dat_from)[k] \
                 ); \
-                /* printf("%ld %ld %f %f\n", current_dat_from - dat_from + k * sizeof(dtype##_t), \
-                       (current_dat_to - dat_to) / sizeof(dtype##_t) + k, \
-                       *(float *) (current_dat_to + k * sizeof(dtype##_t)), \
-                       *(float *) (current_dat_from + k * sizeof(dtype##_t))); */ \
-            } \
-            for (size_t j = 0; j < last_dim / sizeof(dtype##_t); ++j) { \
-                /* printf("%ld %ld %f %f\n", f_index + j * sizeof(dtype##_t), \
-                       i * last_dim / sizeof(dtype##_t) + j, \
-                       *(float *) (dat_to + i * last_dim + j * sizeof(dtype##_t)), \
-                       *(float *) (dat_from + f_index + j * sizeof(dtype##_t))); */ \
             } \
             ADVANCE_INDEX(vec_n_dims) \
         } \
@@ -131,20 +143,11 @@ case dtype##_d: \
     ); \
     break;
 
-#define MAP_WRAPPER(name) \
-MAP_PROTO(name) \
-{ \
-    switch(dtype) { \
-        FORALL_DTYPES(MAP_CASE, name) \
-    } \
-}
+#define MAP_FUNC_MATH(name) FUNC_MATH(MAP, name)
 
-#define MAP_FUNC(name, function) \
-FORALL_DTYPES(MAP, name, function) \
-\
-MAP_WRAPPER(name)
 
-#define MAP_FLOAT_FUNC(name) ANY_FLOAT_FUNC(MAP, name)
+// -- Elementwise
+// -- -----------
 
 #define ELEMENTWISE(dtype, name, operator) \
 void \
@@ -180,7 +183,7 @@ name##_##dtype ( \
             char *current_dat_from1 = dat_from1 + f_index1; \
             char *current_dat_from2 = dat_from2 + f_index2; \
             for (size_t j = 0; j < last_dim / SIZEOF_AVX512; ++j) { \
-                for (size_t k = 0; k < VECTORIZED_SIZE_##dtype; ++k) { \
+                for (size_t k = 0; k < VECTORIZED_SIZE(dtype); ++k) { \
                     ((dtype##_t *) current_dat_to)[k] = operator( \
                         ((dtype##_t *) current_dat_from1)[k],  \
                         ((dtype##_t *) current_dat_from2)[k] \
@@ -231,15 +234,9 @@ case dtype##_d: \
     ); \
     break;
 
-#define ELEMENTWISE_FUNC(name, operator) \
-FORALL_DTYPES(ELEMENTWISE, name, operator) \
-\
-ELEMENTWISE_PROTO(name) \
-{ \
-    switch(dtype) { \
-        FORALL_DTYPES(ELEMENTWISE_CASE, name) \
-    } \
-}
+
+// -- Allclose
+// -- --------
 
 #define ALLCLOSE(dtype, ignored, abs_function) \
 int \
@@ -273,7 +270,7 @@ allclose_##dtype ( \
 
 #define ALLCLOSE_CASE(dtype, ignored) \
 case dtype##_d: \
-    return allclose_##dtype( \
+    allclose_##dtype( \
         rtol, \
         atol, \
         n_dims, \
@@ -284,16 +281,128 @@ case dtype##_d: \
         stride2, \
         offset2, \
         dat2 \
-    );
+    ); \
+    break;
 
-#define ALLCLOSE_FUNC ANY_FLOAT_FUNC(ALLCLOSE, fabs)
+
+// -- Eye
+// -- ---
+
+#define EYE(dtype, ignored, ignored_) \
+void \
+eye_##dtype ( \
+    size_t rows, \
+    size_t columns, \
+    long long k, \
+    dtype##_t *dat) \
+{ \
+    size_t rowShift = (k < 0) ? -k : 0; \
+    size_t columnShift = (k > 0) ? k : 0; \
+    size_t row_nonzero = rows - rowShift; \
+    size_t column_nonzero = columns - columnShift; \
+    size_t total_nonzero = (row_nonzero < column_nonzero) ? row_nonzero : column_nonzero; \
+    for (size_t i = 0; i < total_nonzero; ++i) { \
+        dat[(i + rowShift) * columns + i + columnShift] = 1; \
+    } \
+}
+
+#define EYE_CASE(dtype, ignored) \
+case dtype##_d: \
+    eye_##dtype( \
+        rows, \
+        columns, \
+        k, \
+        (dtype##_t *) dat \
+    ); \
+    break;
+
+
+// -- Fold
+// -- ----
+
+#define FOLD(dtype, name, function) \
+dtype##_t \
+name##_##dtype ( \
+    int n_dims, \
+    size_t *shape, \
+    long long *stride, \
+    size_t offset, \
+    char *dat) \
+{ \
+    size_t *index = calloc(n_dims, sizeof(size_t)); \
+    size_t numel = total_elems(n_dims, shape); \
+    size_t f_index = offset; \
+    function##_INIT(dtype) \
+    for (size_t i = 0; i < numel; ++i) { \
+        function##_STEP(dtype, *(dtype##_t *) (dat + f_index)) \
+        ADVANCE_INDEX(n_dims) \
+    } \
+    free(index); \
+    return accum; \
+}
+
+#define FOLD_CASE(dtype, name) \
+case dtype##_d: \
+    *(dtype##_t *) out = name##_##dtype( \
+        n_dims, \
+        shape, \
+        stride, \
+        offset, \
+        dat \
+    ); \
+    break;
+
+
+// -- Map operations
+// -- --------------
 
 #define SCALAR_SIGN(arg) (0 < arg) - (arg < 0)
+
+
+// -- Elementwise operations
+// -- ----------------------
 
 #define SCALAR_ADD(arg1, arg2) arg1 + arg2
 #define SCALAR_SUB(arg1, arg2) arg1 - arg2
 #define SCALAR_MULT(arg1, arg2) arg1 * arg2
 #define SCALAR_DIV(arg1, arg2) arg1 / arg2
+
+
+// -- Fold operations
+// -- ---------------
+
+#define MIN_INT_INIT(dtype) \
+    dtype##_t accum = MAX_VALUE(dtype);
+#define MIN_INT_STEP(dtype, next_value) \
+    accum = (next_value < accum) ? next_value : accum;
+
+#define MIN_FLOAT_INIT(dtype) \
+    dtype##_t accum = INFINITY;
+#define MIN_FLOAT_STEP(dtype, next_value) \
+    MIN_INT_STEP(dtype, next_value)
+
+#define MAX_INT_INIT(dtype) \
+    dtype##_t accum = MIN_VALUE(dtype);
+#define MAX_INT_STEP(dtype, next_value) \
+    accum = (next_value > accum) ? next_value : accum;
+
+#define MAX_FLOAT_INIT(dtype) \
+    dtype##_t accum = -INFINITY;
+#define MAX_FLOAT_STEP(dtype, next_value) \
+    MAX_INT_STEP(dtype, next_value)
+
+#define SUM_INT_INIT(dtype) \
+    dtype##_t accum = 0;
+#define SUM_INT_STEP(dtype, next_value) \
+    accum += next_value;
+
+#define SUM_FLOAT_INIT(dtype) \
+    dtype##_t accum = 0, c = 0;
+#define SUM_FLOAT_STEP(dtype, next_value) \
+    dtype##_t y = next_value - c; \
+    dtype##_t t = accum + y; \
+    c = (t - accum) - y; \
+    accum = t;
 
 
 MAP(int8, abs, abs)
@@ -307,53 +416,21 @@ MAP_ID(uint64, abs)
 MAP(float32, abs, fabsf)
 MAP(float64, abs, fabs)
 
-MAP_WRAPPER(abs)
-MAP_FUNC(sign, SCALAR_SIGN)
-MAP_FUNC(neg, -)
+FUNC_WRAPPER(FORALL_DTYPES, MAP, abs)
+FUNC(MAP, sign, SCALAR_SIGN)
+FUNC(MAP, neg, -)
 
-FORALL_FLOATING(MAP_FLOAT_FUNC)
+FORALL_MATH(MAP_FUNC_MATH)
 
-ELEMENTWISE_FUNC(add, SCALAR_ADD)
-ELEMENTWISE_FUNC(sub, SCALAR_SUB)
-ELEMENTWISE_FUNC(mult, SCALAR_MULT)
-ELEMENTWISE_FUNC(div, SCALAR_DIV)
+FUNC(ELEMENTWISE, add,  SCALAR_ADD)
+FUNC(ELEMENTWISE, sub,  SCALAR_SUB)
+FUNC(ELEMENTWISE, mult, SCALAR_MULT)
+FUNC(ELEMENTWISE, div,  SCALAR_DIV)
 
-ALLCLOSE_FUNC
+FUNC_MATH(ALLCLOSE, fabs)
 
-void
-eye_f (
-    int rows,
-    int columns,
-    int k,
-    float *dat)
-{
-    int min_dim = (rows < columns) ? rows : columns;
-    int columnShift = (k < 0) ? -k : 0;
-    int rowShift = (k > 0) ? k : 0;
-    for (int i = 0; i < min_dim - columnShift - rowShift; ++i) {
-        dat[(i + columnShift) * columns + i + rowShift] = 1;
-    }
-}
+FUNC(EYE, _, _)
 
-float
-sum_f (
-    int n_dims,
-    size_t *shape,
-    long long *stride,
-    size_t offset,
-    char *dat)
-{
-    size_t *index = calloc(n_dims, sizeof(size_t));
-    int numel = total_elems(n_dims, shape);
-    int f_index = offset;
-    float sum = 0, c = 0;
-    for (int i = 0; i < numel; ++i) {
-        float y = *(float *) (dat + f_index) - c;
-        float t = sum + y;
-        c = (t - sum) - y;
-        sum = t;
-        ADVANCE_INDEX(n_dims)
-    }
-    free(index);
-    return sum;
-}
+FUNC_INT_FLOAT(FOLD, min, MIN)
+FUNC_INT_FLOAT(FOLD, max, MAX)
+FUNC_INT_FLOAT(FOLD, sum, SUM)

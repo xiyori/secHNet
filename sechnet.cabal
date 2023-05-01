@@ -73,7 +73,7 @@ library
     C-sources:
       src/Data/Tensor/cbits/cbits.c
       , src/Data/Tensor/cbits/num_tensor.c
-    cc-options: -O3
+    cc-options: -O3 -mno-vzeroupper
     ghc-options: -funbox-strict-fields -fforce-recomp
 
 test-suite sechnet-test

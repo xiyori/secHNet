@@ -16,7 +16,7 @@ tensor_##name ( \
     char *dat_from, \
     char *dat_to)
 
-#define MAP_PROTO_COMPLETE(name) \
+#define MAP_PROTO_SEMICOLON(name) \
 MAP_PROTO(name);
 
 #define ELEMENTWISE_PROTO(name) \
@@ -33,20 +33,6 @@ tensor_##name ( \
     char *dat_from2, \
     char *dat_to)
 
-#define FORALL_FLOATING(expr) \
-expr(exp) \
-expr(log) \
-expr(sin) \
-expr(cos) \
-expr(asin) \
-expr(acos) \
-expr(atan) \
-expr(sinh) \
-expr(cosh) \
-expr(asinh) \
-expr(acosh) \
-expr(atanh)
-
 #define ALLCLOSE_PROTO(ignored) \
 int \
 tensor_allclose ( \
@@ -62,12 +48,46 @@ tensor_allclose ( \
     size_t offset2, \
     char *dat2)
 
+#define EYE_PROTO(ignored) \
+void \
+tensor_eye ( \
+    size_t rows, \
+    size_t columns, \
+    long long k, \
+    dtype_t dtype, \
+    char *dat)
+
+#define FOLD_PROTO(name) \
+void \
+tensor_##name ( \
+    int n_dims, \
+    size_t *shape, \
+    long long *stride, \
+    size_t offset, \
+    dtype_t dtype, \
+    char *dat, \
+    char *out) \
+
+#define FORALL_MATH(expr) \
+expr(exp) \
+expr(log) \
+expr(sin) \
+expr(cos) \
+expr(asin) \
+expr(acos) \
+expr(atan) \
+expr(sinh) \
+expr(cosh) \
+expr(asinh) \
+expr(acosh) \
+expr(atanh)
+
 
 MAP_PROTO(abs);
 MAP_PROTO(sign);
 MAP_PROTO(neg);
 
-FORALL_FLOATING(MAP_PROTO_COMPLETE)
+FORALL_MATH(MAP_PROTO_SEMICOLON)
 
 ELEMENTWISE_PROTO(add);
 ELEMENTWISE_PROTO(sub);
@@ -75,5 +95,11 @@ ELEMENTWISE_PROTO(mult);
 ELEMENTWISE_PROTO(div);
 
 ALLCLOSE_PROTO(_);
+
+EYE_PROTO(_);
+
+FOLD_PROTO(min);
+FOLD_PROTO(max);
+FOLD_PROTO(sum);
 
 #endif
