@@ -3,6 +3,7 @@ module Data.Tensor.ListUtils where
 import Data.Vector.Storable (Storable, Vector, (!), (//))
 import qualified Data.Vector.Storable as V
 import Data.Tensor.Index
+import Data.Tensor.Definitions
 
 -- | Determine tensor shape from list.
 parseShape1 :: [t] -> Index

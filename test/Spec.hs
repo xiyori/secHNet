@@ -6,8 +6,38 @@ import Test.QuickCheck
 import Test.Invariant
 import qualified Data.Vector.Storable as V
 import Instances
-import Data.Tensor.Index
-import Data.Tensor as T
+import Data.Tensor (
+      totalElems,
+      equal,
+      allClose,
+      (&),
+      (|.),
+      Tensor(Tensor, tensorOffset, tensorData, shape),
+      HasArange(arange),
+      Slice((:|), I, S, E, (:.), Ell, None, A),
+      Index, fromList3,
+      tensor,
+      full,
+      zeros,
+      ones,
+      scalar,
+      single,
+      zerosLike,
+      onesLike,
+      eye,
+      broadcast,
+      elementwise,
+      (!),
+      (!:),
+      item,
+      numel,
+      mean,
+      copy,
+      transpose,
+      flatten,
+      view,
+      insertDim)
+import qualified Data.Tensor as T
 
 import Foreign.C.Types
 import System.IO.Unsafe
@@ -17,15 +47,15 @@ import System.IO.Unsafe
 -- ----------
 
 prop_fromList3 :: Bool
-prop_fromList3 = (fromList3 [[[], []], [[], []], [[], []]] :: Tensor CFloat) == zeros (V.fromList [3, 2, 0])
+prop_fromList3 = (fromList3 [[[], []], [[], []], [[], []]] :: Tensor CFloat) `equal` zeros (V.fromList [3, 2, 0])
 
 prop_tensor0 :: Index -> Bool
-prop_tensor0 shape = tensor shape (const (0 :: CFloat)) == zeros shape
+prop_tensor0 shape = tensor shape (const (0 :: CFloat)) `equal` zeros shape
 
 prop_tensor :: Index -> Gen Bool
 prop_tensor shape = do
   x@(Tensor _ _ _ dat) <- arbitraryContiguousWithShape shape :: Gen (Tensor CFloat)
-  return $ tensor shape (dat V.!) == x
+  return $ tensor shape (dat V.!) `equal` x
 
 prop_scalar :: CFloat -> Bool
 prop_scalar value = item (scalar value) == value
@@ -47,28 +77,12 @@ prop_elementwise_zero :: Tensor CFloat -> Bool
 prop_elementwise_zero x = elementwise (*) x 0 `allClose` zerosLike x
 
 prop_elementwise_id :: Index -> Bool
-prop_elementwise_id shape = elementwise (*) (ones shape :: Tensor CFloat) (ones shape) == ones shape
+prop_elementwise_id shape = elementwise (*) (ones shape :: Tensor CFloat) (ones shape) `equal` ones shape
 
 prop_elementwise_commutative :: Gen Bool
 prop_elementwise_commutative = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
   return $ elementwise (+) x1 x2 `allClose` elementwise (+) x2 x1
-
-prop_eq :: Tensor CFloat -> Bool
-prop_eq x = x == x
-
-prop_not_eq :: Tensor CFloat -> Bool
-prop_not_eq x@(Tensor shape _ _ _)
-  | totalElems shape /= 0 = x /= (x + 1)
-  | otherwise             = True
-
-prop_allclose :: Tensor CFloat -> Bool
-prop_allclose x = allClose x x
-
-prop_not_allclose :: Tensor CFloat -> Bool
-prop_not_allclose x@(Tensor shape _ _ _)
-  | totalElems shape /= 0 = not $ allClose x (x + 1)
-  | otherwise             = True
 
 prop_getelem :: Index -> Bool
 prop_getelem shape
@@ -83,7 +97,7 @@ prop_getelem_single = single (0 :: CFloat) ! [0] == 0
 
 prop_slice_index :: Tensor CFloat -> Bool
 prop_slice_index x@(Tensor shape _ _ _)
-  | totalElems shape /= 0 = scalar (x ! replicate (V.length shape) 0) == x !: replicate (V.length shape) (I 0)
+  | totalElems shape /= 0 = scalar (x ! replicate (V.length shape) 0) `equal` x !: replicate (V.length shape) (I 0)
   | otherwise             = True
 
 prop_slice_single :: Tensor CFloat -> Bool
@@ -92,82 +106,82 @@ prop_slice_single x@(Tensor shape _ _ _)
   | otherwise             = True
 
 prop_slice_all :: Tensor CFloat -> Bool
-prop_slice_all x@(Tensor shape _ _ _) = x !: replicate (V.length shape) A == x
+prop_slice_all x@(Tensor shape _ _ _) = x !: replicate (V.length shape) A `equal` x
 
 prop_slice_all0 :: Tensor CFloat -> Bool
-prop_slice_all0 x@(Tensor shape _ _ _) = x !: [] == x
+prop_slice_all0 x@(Tensor shape _ _ _) = x !: [] `equal` x
 
 prop_slice_all1 :: Tensor CFloat -> Bool
 prop_slice_all1 x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [A] == x
+  | V.length shape > 0 = x !: [A] `equal` x
   | otherwise          = True
 
 prop_slice_start_all :: Tensor CFloat -> Bool
-prop_slice_start_all x@(Tensor shape _ _ _) = x !: replicate (V.length shape) (S 0) == x
+prop_slice_start_all x@(Tensor shape _ _ _) = x !: replicate (V.length shape) (S 0) `equal` x
 
 prop_slice_start1_all :: Tensor CFloat -> Bool
 prop_slice_start1_all x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [S 0] == x
+  | V.length shape > 0 = x !: [S 0] `equal` x
   | otherwise          = True
 
 prop_slice_start_equiv :: Tensor CFloat -> Bool
 prop_slice_start_equiv x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [S 1] == x !: [1:.fromIntegral (V.head shape)]
+  | V.length shape > 0 = x !: [S 1] `equal` x !: [1:.fromIntegral (V.head shape)]
   | otherwise          = True
 
 prop_slice_end_all :: Tensor CFloat -> Bool
-prop_slice_end_all x@(Tensor shape _ _ _) = x !: Prelude.map (E . fromIntegral) (V.toList shape) == x
+prop_slice_end_all x@(Tensor shape _ _ _) = x !: map (E . fromIntegral) (V.toList shape) `equal` x
 
 prop_slice_end1_all :: Tensor CFloat -> Bool
 prop_slice_end1_all x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [E $ fromIntegral (V.head shape)] == x
+  | V.length shape > 0 = x !: [E $ fromIntegral (V.head shape)] `equal` x
   | otherwise          = True
 
 prop_slice_end_equiv :: Tensor CFloat -> Bool
 prop_slice_end_equiv x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [E (-1)] == x !: [0:. fromIntegral (V.head shape) - 1]
+  | V.length shape > 0 = x !: [E (-1)] `equal` x !: [0:. fromIntegral (V.head shape) - 1]
   | otherwise          = True
 
 prop_slice_negative :: Tensor CFloat -> Bool
 prop_slice_negative x@(Tensor shape _ _ _)
   | V.length shape > 0 =
-    x !: [-3:. -1] == x !: [Prelude.max 0 (fromIntegral (V.head shape) - 3):.fromIntegral (V.head shape) - 1]
+    x !: [-3:. -1] `equal` x !: [max 0 (fromIntegral (V.head shape) - 3):.fromIntegral (V.head shape) - 1]
   | otherwise          = True
 
 prop_slice_none :: Tensor CFloat -> Bool
-prop_slice_none x = insertDim x 0 == x !: [None]
+prop_slice_none x = insertDim x 0 `equal` x !: [None]
 
 prop_slice_ell :: Tensor CFloat -> Bool
 prop_slice_ell x@(Tensor shape _ _ _)
   | V.length shape > 0 =
-    x !: [Ell, 0:.1] ==
+    x !: [Ell, 0:.1] `equal`
     x !: (replicate (V.length shape - 1) A ++ [0:.1])
   | otherwise =
     True
 
 prop_slice_insert_dim :: Tensor CFloat -> Bool
-prop_slice_insert_dim x = insertDim x (-1) == x !: [Ell, None]
+prop_slice_insert_dim x = insertDim x (-1) `equal` x !: [Ell, None]
 
 prop_slice_step1 :: Tensor CFloat -> Bool
-prop_slice_step1 x@(Tensor shape _ _ _) = x !: replicate (V.length shape) (A:|1) == x
+prop_slice_step1 x@(Tensor shape _ _ _) = x !: replicate (V.length shape) (A:|1) `equal` x
 
 prop_slice_step11 :: Tensor CFloat -> Bool
 prop_slice_step11 x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [A:|1] == x
+  | V.length shape > 0 = x !: [A:|1] `equal` x
   | otherwise          = True
 
 prop_slice_neg_step_id :: Tensor CFloat -> Bool
-prop_slice_neg_step_id x@(Tensor shape _ _ _) = x !: slice !: slice == x
+prop_slice_neg_step_id x@(Tensor shape _ _ _) = x !: slice !: slice `equal` x
   where
     slice = replicate (V.length shape) (A:| -1)
 
 prop_slice_neg_step_id1 :: Tensor CFloat -> Bool
 prop_slice_neg_step_id1 x@(Tensor shape _ _ _)
-  | V.length shape > 0 = x !: [A:| -1] !: [A:| -1] == x
+  | V.length shape > 0 = x !: [A:| -1] !: [A:| -1] `equal` x
   | otherwise          = True
 
 prop_slice_step :: Bool
-prop_slice_step = (arange 0 10 1 :: Tensor CFloat) !: [A:|2] == arange 0 10 2
+prop_slice_step = (arange 0 10 1 :: Tensor CFloat) !: [A:|2] `equal` arange 0 10 2
 
 prop_slice_neg_step :: Bool
 prop_slice_neg_step = (arange 0 10 1 :: Tensor CFloat) !: [A:| -2] `allClose` arange 9 (-1) (-2)
@@ -175,10 +189,10 @@ prop_slice_neg_step = (arange 0 10 1 :: Tensor CFloat) !: [A:| -2] `allClose` ar
 prop_numel :: Index -> Bool
 prop_numel shape = fromIntegral (numel x) == V.length (tensorData x)
   where
-    x = zeros shape :: Tensor CFloat
+    x = copy $ zeros shape :: Tensor CFloat
 
 prop_copy :: Tensor CFloat -> Bool
-prop_copy x = x == copy x
+prop_copy x = x `equal` copy x
 
 prop_copy_offset :: Tensor CFloat -> Bool
 prop_copy_offset x = tensorOffset (copy x) == 0
@@ -189,26 +203,88 @@ prop_copy_numel x = fromIntegral (numel x1) == V.length (tensorData x1)
     x1 = copy x
 
 prop_transpose_id :: Tensor CFloat -> Bool
-prop_transpose_id x = transpose (transpose x1) == x1
+prop_transpose_id x = transpose (transpose x1) `equal` x1
   where
     x1 = insertDim (insertDim x 0) 0
 
 prop_flatten_id :: Tensor CFloat -> Bool
-prop_flatten_id x = flatten x `view` shape x == x
+prop_flatten_id x = flatten x `view` shape x `equal` x
 
 prop_view :: Tensor CFloat -> Bool
 prop_view x =
   transpose (
     (xT `view` V.singleton (totalElems $ shape x)) `view` shape xT
-  ) == x1
+  ) `equal` x1
   where
     x1 = insertDim (insertDim x 0) 0
     xT = transpose x1
 
 prop_insert_dim :: Index -> Bool
-prop_insert_dim shape = insertDim x 0 == zeros (V.concat [V.singleton 1, shape])
+prop_insert_dim shape = insertDim x 0 `equal` zeros (V.concat [V.singleton 1, shape])
   where
     x = zeros shape :: Tensor CFloat
+
+
+-- Boolean
+-- -------
+
+prop_equal :: Tensor CFloat -> Bool
+prop_equal x = x `equal` x
+
+prop_not_equal :: Tensor CFloat -> Bool
+prop_not_equal x@(Tensor shape _ _ _)
+  | totalElems shape /= 0 = not $ x `equal` (x + 1)
+  | otherwise             = True
+
+prop_allclose :: Tensor CFloat -> Bool
+prop_allclose x = allClose x x
+
+prop_not_allclose :: Tensor CFloat -> Bool
+prop_not_allclose x@(Tensor shape _ _ _)
+  | totalElems shape /= 0 = not $ allClose x (x + 1)
+  | otherwise             = True
+
+prop_tensor_equal1 :: Tensor CFloat -> Bool
+prop_tensor_equal1 x = (x T.== x) `equal` onesLike x
+
+prop_tensor_equal0 :: Tensor CFloat -> Bool
+prop_tensor_equal0 x@(Tensor shape _ _ _)
+  | totalElems shape /= 0 = (x T.== x + 1) `equal` zerosLike x
+  | otherwise             = True
+
+prop_tensor_not_equal0 :: Tensor CFloat -> Bool
+prop_tensor_not_equal0 x = (x T./= x) `equal` zerosLike x
+
+prop_tensor_not_equal1 :: Tensor CFloat -> Bool
+prop_tensor_not_equal1 x@(Tensor shape _ _ _)
+  | totalElems shape /= 0 = (x T./= x + 1) `equal` onesLike x
+  | otherwise             = True
+
+prop_tensor_less :: Tensor CFloat -> Bool
+prop_tensor_less x = (x T.< x) `equal` zerosLike x
+
+prop_tensor_leq :: Tensor CFloat -> Bool
+prop_tensor_leq x = (x T.<= x) `equal` onesLike x
+
+prop_tensor_not_greater :: Gen Bool
+prop_tensor_not_greater = do
+  (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
+  case broadcast x1 x2 of {(x1b, x2b) ->
+    return $ T.not (x1b T.> x2b) `equal` (x1b T.<= x2b)
+  }
+
+prop_not :: Index -> Bool
+prop_not shape = T.not (zeros shape) `equal` (ones shape :: Tensor CBool)
+
+prop_and :: Index -> Bool
+prop_and shape = (ones shape & ones shape) `equal` (ones shape :: Tensor CBool) &&
+                 (zeros shape & ones shape) `equal` (zeros shape :: Tensor CBool) &&
+                 (zeros shape & zeros shape) `equal` (zeros shape :: Tensor CBool)
+
+prop_or :: Index -> Bool
+prop_or shape = (ones shape |. ones shape) `equal` (ones shape :: Tensor CBool) &&
+                (zeros shape |. ones shape) `equal` (ones shape :: Tensor CBool) &&
+                (zeros shape |. zeros shape) `equal` (zeros shape :: Tensor CBool)
 
 
 -- FloatTensor
@@ -220,19 +296,19 @@ prop_eye_unit = x ! [0, 0] == 1 && x ! [1, 1] == 1 && x ! [0, 1] == 0 && x ! [1,
     x = eye 2 2 0 :: Tensor CFloat
 
 prop_eye_transpose0_unit :: Bool
-prop_eye_transpose0_unit = transpose x == x
+prop_eye_transpose0_unit = transpose x `equal` x
   where
     x = eye 3 3 0 :: Tensor CFloat
 
 prop_eye_transpose1_unit :: Bool
-prop_eye_transpose1_unit = transpose x /= x
+prop_eye_transpose1_unit = not $ transpose x `equal` x
   where
     x = eye 3 3 1 :: Tensor CFloat
 
 prop_arange :: Index -> Bool
 prop_arange shape
   | totalElems shape /= 0 =
-    flatten (tensor shape fromIntegral) ==
+    flatten (tensor shape fromIntegral) `equal`
     arange (0 :: CFloat) (fromIntegral $ totalElems shape) 1
   | otherwise =
     True
@@ -248,19 +324,22 @@ prop_arange_neg shape
 prop_min :: Tensor CDouble -> Bool
 prop_min x
   | numel x /= 0 =
-    T.min x == T.foldl' Prelude.min (1 / 0) x
+    T.min x == T.foldl' min (1 / 0) x
   | otherwise =
     True
 
 prop_max :: Tensor CDouble -> Bool
 prop_max x
   | numel x /= 0 =
-    T.max x == T.foldl' Prelude.max (-1 / 0) x
+    T.max x == T.foldl' max (-1 / 0) x
   | otherwise =
     True
 
-prop_sum :: Index -> Bool
-prop_sum shape = T.sum (ones shape :: Tensor CFloat) == fromIntegral (totalElems shape)
+-- prop_sum :: Tensor CFloat -> Bool
+-- prop_sum x = T.sum x == T.foldl' (+) 0 x
+
+prop_sum_ones :: Index -> Bool
+prop_sum_ones shape = T.sum (ones shape :: Tensor CFloat) == fromIntegral (totalElems shape)
 
 prop_sum_distributive :: Index -> Gen Bool
 prop_sum_distributive shape = do
@@ -280,12 +359,12 @@ prop_mean_empty :: Index -> Bool
 prop_mean_empty shape = isNaN $ T.mean (ones $ V.snoc shape 0 :: Tensor CFloat)
 
 prop_abs :: Index -> Bool
-prop_abs shape = abs x == x
+prop_abs shape = abs x `equal` x
   where
     x = ones shape :: Tensor CFloat
 
 prop_abs_neg :: Index -> Bool
-prop_abs_neg shape = abs x == (-x)
+prop_abs_neg shape = abs x `equal` (-x)
   where
     x = full shape (-1) :: Tensor CFloat
 
@@ -303,9 +382,7 @@ prop_add_commutative = do
 prop_num_associative :: Index -> Gen Bool
 prop_num_associative shape = do
   (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CDouble, Tensor CDouble)
-  return $
-    -- unsafePerformIO $ print (((x1 + x2) * x2) - (x1 * x2 + x2 * x2)) >>
-     (((x1 + x2) * x2) `allClose` (x1 * x2 + x2 * x2))
+  return $ ((x1 + x2) * x2) `allClose` (x1 * x2 + x2 * x2)
 
 
 -- Instances

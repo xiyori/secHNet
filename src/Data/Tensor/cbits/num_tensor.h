@@ -2,6 +2,7 @@
 #define NUM_TENSOR_H
 
 #include <math.h>
+#include <stdio.h>
 
 #include "cbits.h"
 
@@ -93,6 +94,14 @@ ELEMENTWISE_PROTO(add);
 ELEMENTWISE_PROTO(sub);
 ELEMENTWISE_PROTO(mult);
 ELEMENTWISE_PROTO(div);
+
+ELEMENTWISE_PROTO(equal);
+ELEMENTWISE_PROTO(not_equal);
+ELEMENTWISE_PROTO(greater);
+ELEMENTWISE_PROTO(less);
+ELEMENTWISE_PROTO(geq);
+ELEMENTWISE_PROTO(leq);
+MAP_PROTO(not);
 
 ALLCLOSE_PROTO(_);
 

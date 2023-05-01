@@ -4,7 +4,11 @@
 // -- Common
 // -- ------
 
+#define FOR_BOOL(expr, ...) \
+expr(cbool, __VA_ARGS__)
+
 #define FORALL_INT_DTYPES(expr, ...) \
+expr(cbool, __VA_ARGS__) \
 expr(int8, __VA_ARGS__) \
 expr(uint8, __VA_ARGS__) \
 expr(int16, __VA_ARGS__) \
@@ -30,8 +34,13 @@ macro##_PROTO(name) \
     } \
 }
 
-#define FUNC(macro, name, function) \
-FORALL_DTYPES(macro, name, function) \
+#define FUNC(macro, name, ...) \
+FORALL_DTYPES(macro, name, __VA_ARGS__) \
+\
+FUNC_WRAPPER(FORALL_DTYPES, macro, name)
+
+#define FUNC_GENERIC(macro, name, ...) \
+FORALL_DTYPES(macro##_GENERIC, name, __VA_ARGS__) \
 \
 FUNC_WRAPPER(FORALL_DTYPES, macro, name)
 
@@ -51,7 +60,7 @@ FUNC_WRAPPER(FORALL_FLOAT_DTYPES, macro, name)
 // -- Map
 // -- ---
 
-#define MAP(dtype, name, function) \
+#define MAP_GENERIC(dtype, name, dtype_to, function) \
 void \
 name##_##dtype ( \
     int n_dims, \
@@ -62,6 +71,7 @@ name##_##dtype ( \
     char * __restrict dat_to) \
 { \
     size_t last_dim = sizeof(dtype##_t); \
+    size_t last_dim_to = sizeof(dtype_to##_t); \
     int vec_n_dims; \
     for (int dim = n_dims - 1; dim >= -1; --dim) { \
         if (dim == -1 || stride[dim] != last_dim) { \
@@ -69,46 +79,46 @@ name##_##dtype ( \
             break; \
         } \
         last_dim *= shape[dim]; \
+        last_dim_to *= shape[dim]; \
     } \
     /* Vectorize operations for contiguous tensors */ \
     if (last_dim >= SIZEOF_AVX512) { \
-        size_t *index = calloc(vec_n_dims, sizeof(size_t)); \
-        size_t numel = total_elems(vec_n_dims, shape); \
-        size_t f_index = offset; \
+        INIT_INDEX(vec_n_dims) \
         for (size_t i = 0; i < numel; ++i) { \
-            char *current_dat_to = dat_to + i * last_dim; \
+            char *current_dat_to = dat_to + i * last_dim_to; \
             char *current_dat_from = dat_from + f_index; \
             for (size_t j = 0; j < last_dim / SIZEOF_AVX512; ++j) { \
                 for (size_t k = 0; k < VECTORIZED_SIZE(dtype); ++k) { \
-                    ((dtype##_t *) current_dat_to)[k] = function( \
+                    ((dtype_to##_t *) current_dat_to)[k] = function( \
                         ((dtype##_t *) current_dat_from)[k] \
                     ); \
                 } \
-                current_dat_to += SIZEOF_AVX512; \
+                current_dat_to += VECTORIZED_SIZE(dtype) * sizeof(dtype_to##_t); \
                 current_dat_from += SIZEOF_AVX512; \
             } \
             for (size_t k = 0; k < (last_dim % SIZEOF_AVX512) / \
-                                sizeof(dtype##_t); ++k) { \
-                ((dtype##_t *) current_dat_to)[k] = function( \
+                                   sizeof(dtype##_t); ++k) { \
+                ((dtype_to##_t *) current_dat_to)[k] = function( \
                     ((dtype##_t *) current_dat_from)[k] \
                 ); \
             } \
             ADVANCE_INDEX(vec_n_dims) \
         } \
-        free(index); \
+        DESTROY_INDEX() \
     } else { \
-        size_t *index = calloc(n_dims, sizeof(size_t)); \
-        size_t numel = total_elems(n_dims, shape); \
-        size_t f_index = offset; \
+        INIT_INDEX(n_dims) \
         for (size_t i = 0; i < numel; ++i) { \
-            *(dtype##_t *) (dat_to + i * sizeof(dtype##_t)) = function( \
+            *(dtype_to##_t *) (dat_to + i * sizeof(dtype_to##_t)) = function( \
                 *(dtype##_t *) (dat_from + f_index) \
             ); \
             ADVANCE_INDEX(n_dims) \
         } \
-        free(index); \
+        DESTROY_INDEX() \
     } \
 }
+
+#define MAP(dtype, name, function) \
+MAP_GENERIC(dtype, name, dtype, function)
 
 #define MAP_ID(dtype, name) \
 void \
@@ -149,7 +159,7 @@ case dtype##_d: \
 // -- Elementwise
 // -- -----------
 
-#define ELEMENTWISE(dtype, name, operator) \
+#define ELEMENTWISE_GENERIC(dtype, name, dtype_to, operator) \
 void \
 name##_##dtype ( \
     int n_dims, \
@@ -163,6 +173,7 @@ name##_##dtype ( \
     char * __restrict dat_to) \
 { \
     size_t last_dim = sizeof(dtype##_t); \
+    size_t last_dim_to = sizeof(dtype_to##_t); \
     int vec_n_dims; \
     for (int dim = n_dims - 1; dim >= -1; --dim) { \
         if (dim == -1 || stride1[dim] != last_dim || \
@@ -171,53 +182,51 @@ name##_##dtype ( \
             break; \
         } \
         last_dim *= shape[dim]; \
+        last_dim_to *= shape[dim]; \
     } \
     /* Vectorize operations for contiguous tensors */ \
     if (last_dim >= SIZEOF_AVX512) { \
-        size_t *index = calloc(vec_n_dims, sizeof(size_t)); \
-        size_t numel = total_elems(vec_n_dims, shape); \
-        size_t f_index1 = offset1; \
-        size_t f_index2 = offset2; \
+        INIT_INDEX2(vec_n_dims) \
         for (size_t i = 0; i < numel; ++i) { \
-            char *current_dat_to = dat_to + i * last_dim; \
+            char *current_dat_to = dat_to + i * last_dim_to; \
             char *current_dat_from1 = dat_from1 + f_index1; \
             char *current_dat_from2 = dat_from2 + f_index2; \
             for (size_t j = 0; j < last_dim / SIZEOF_AVX512; ++j) { \
                 for (size_t k = 0; k < VECTORIZED_SIZE(dtype); ++k) { \
-                    ((dtype##_t *) current_dat_to)[k] = operator( \
+                    ((dtype_to##_t *) current_dat_to)[k] = operator( \
                         ((dtype##_t *) current_dat_from1)[k],  \
                         ((dtype##_t *) current_dat_from2)[k] \
                     ); \
                 } \
-                current_dat_to += SIZEOF_AVX512; \
+                current_dat_to += VECTORIZED_SIZE(dtype) * sizeof(dtype_to##_t); \
                 current_dat_from1 += SIZEOF_AVX512; \
                 current_dat_from2 += SIZEOF_AVX512; \
             } \
             for (size_t k = 0; k < (last_dim % SIZEOF_AVX512) / \
-                                sizeof(dtype##_t); ++k) { \
-                ((dtype##_t *) current_dat_to)[k] = operator( \
+                                   sizeof(dtype##_t); ++k) { \
+                ((dtype_to##_t *) current_dat_to)[k] = operator( \
                     ((dtype##_t *) current_dat_from1)[k],  \
                     ((dtype##_t *) current_dat_from2)[k] \
                 ); \
             } \
             ADVANCE_INDEX2(vec_n_dims) \
         } \
-        free(index); \
+        DESTROY_INDEX() \
     } else { \
-        size_t *index = calloc(n_dims, sizeof(size_t)); \
-        size_t numel = total_elems(n_dims, shape); \
-        size_t f_index1 = offset1; \
-        size_t f_index2 = offset2; \
+        INIT_INDEX2(n_dims) \
         for (size_t i = 0; i < numel; ++i) { \
-            *(dtype##_t *) (dat_to + i * sizeof(dtype##_t)) = operator( \
+            *(dtype_to##_t *) (dat_to + i * sizeof(dtype_to##_t)) = operator( \
                 *(dtype##_t *) (dat_from1 + f_index1), \
                 *(dtype##_t *) (dat_from2 + f_index2) \
             ); \
             ADVANCE_INDEX2(n_dims) \
         } \
-        free(index); \
+        DESTROY_INDEX() \
     } \
 }
+
+#define ELEMENTWISE(dtype, name, operator) \
+ELEMENTWISE_GENERIC(dtype, name, dtype, operator)
 
 #define ELEMENTWISE_CASE(dtype, name) \
 case dtype##_d: \
@@ -252,10 +261,7 @@ allclose_##dtype ( \
     size_t offset2, \
     char *dat2) \
 { \
-    size_t *index = calloc(n_dims, sizeof(size_t)); \
-    size_t numel = total_elems(n_dims, shape); \
-    size_t f_index1 = offset1; \
-    size_t f_index2 = offset2; \
+    INIT_INDEX2(n_dims) \
     for (size_t i = 0; i < numel; ++i) { \
         dtype##_t elem1 = *(dtype##_t *) (dat1 + f_index1); \
         dtype##_t elem2 = *(dtype##_t *) (dat2 + f_index2); \
@@ -264,7 +270,7 @@ allclose_##dtype ( \
         } \
         ADVANCE_INDEX2(n_dims) \
     } \
-    free(index); \
+    DESTROY_INDEX() \
     return 1; \
 }
 
@@ -329,15 +335,13 @@ name##_##dtype ( \
     size_t offset, \
     char *dat) \
 { \
-    size_t *index = calloc(n_dims, sizeof(size_t)); \
-    size_t numel = total_elems(n_dims, shape); \
-    size_t f_index = offset; \
+    INIT_INDEX(n_dims) \
     function##_INIT(dtype) \
     for (size_t i = 0; i < numel; ++i) { \
         function##_STEP(dtype, *(dtype##_t *) (dat + f_index)) \
         ADVANCE_INDEX(n_dims) \
     } \
-    free(index); \
+    DESTROY_INDEX() \
     return accum; \
 }
 
@@ -357,6 +361,7 @@ case dtype##_d: \
 // -- --------------
 
 #define SCALAR_SIGN(arg) (0 < arg) - (arg < 0)
+#define SCALAR_NOT(arg) !arg
 
 
 // -- Elementwise operations
@@ -366,6 +371,13 @@ case dtype##_d: \
 #define SCALAR_SUB(arg1, arg2) arg1 - arg2
 #define SCALAR_MULT(arg1, arg2) arg1 * arg2
 #define SCALAR_DIV(arg1, arg2) arg1 / arg2
+
+#define SCALAR_EQUAL(arg1, arg2) arg1 == arg2
+#define SCALAR_NOT_EQUAL(arg1, arg2) arg1 != arg2
+#define SCALAR_GREATER(arg1, arg2) arg1 > arg2
+#define SCALAR_LESS(arg1, arg2) arg1 < arg2
+#define SCALAR_GEQ(arg1, arg2) arg1 >= arg2
+#define SCALAR_LEQ(arg1, arg2) arg1 <= arg2
 
 
 // -- Fold operations
@@ -405,6 +417,7 @@ case dtype##_d: \
     accum = t;
 
 
+MAP_ID(cbool, abs)
 MAP(int8, abs, abs)
 MAP_ID(uint8, abs)
 MAP(int16, abs, abs)
@@ -417,6 +430,7 @@ MAP(float32, abs, fabsf)
 MAP(float64, abs, fabs)
 
 FUNC_WRAPPER(FORALL_DTYPES, MAP, abs)
+
 FUNC(MAP, sign, SCALAR_SIGN)
 FUNC(MAP, neg, -)
 
@@ -426,6 +440,17 @@ FUNC(ELEMENTWISE, add,  SCALAR_ADD)
 FUNC(ELEMENTWISE, sub,  SCALAR_SUB)
 FUNC(ELEMENTWISE, mult, SCALAR_MULT)
 FUNC(ELEMENTWISE, div,  SCALAR_DIV)
+
+FUNC_GENERIC(ELEMENTWISE, equal, cbool, SCALAR_EQUAL)
+FUNC_GENERIC(ELEMENTWISE, not_equal, cbool, SCALAR_NOT_EQUAL)
+FUNC_GENERIC(ELEMENTWISE, greater, cbool, SCALAR_GREATER)
+FUNC_GENERIC(ELEMENTWISE, less, cbool, SCALAR_LESS)
+FUNC_GENERIC(ELEMENTWISE, geq, cbool, SCALAR_GEQ)
+FUNC_GENERIC(ELEMENTWISE, leq, cbool, SCALAR_LEQ)
+
+MAP(cbool, not, SCALAR_NOT)
+
+FUNC_WRAPPER(FOR_BOOL, MAP, not)
 
 FUNC_MATH(ALLCLOSE, fabs)
 

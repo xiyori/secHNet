@@ -46,6 +46,7 @@ library
         Data.Tensor.Definitions,
         Data.Tensor.Functional,
         Data.Tensor.Instances,
+        Data.Tensor.Boolean,
         Data.Tensor
         Data.Layers.Layer,
         Handle.LayerHandle,

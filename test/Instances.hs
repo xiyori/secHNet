@@ -7,7 +7,7 @@ import Control.Monad
 import Data.Vector.Storable (Storable, Vector, (//))
 import qualified Data.Vector.Storable as V
 import System.Random
-import Data.Tensor as T
+import Data.Tensor as T (Tensor, HasDtype, randn, (!:), Slices, Slice((:.), (:|)), Index)
 import Test.QuickCheck
 
 import Foreign.C.Types

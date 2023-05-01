@@ -78,9 +78,7 @@ copy (
         }
         elem_size *= shape[dim];
     }
-    size_t *index = calloc(n_dims, sizeof(size_t));
-    size_t numel = total_elems(n_dims, shape);
-    size_t f_index = offset;
+    INIT_INDEX(n_dims)
     for (size_t i = 0; i < numel; ++i) {
         memcpy(
             dat_to + i * elem_size,
@@ -89,7 +87,7 @@ copy (
         );
         ADVANCE_INDEX(n_dims)
     }
-    free(index);
+    DESTROY_INDEX()
 }
 
 int
@@ -112,16 +110,13 @@ equal (
         }
         elem_size *= shape[dim];
     }
-    size_t *index = calloc(n_dims, sizeof(size_t));
-    size_t numel = total_elems(n_dims, shape);
-    size_t f_index1 = offset1;
-    size_t f_index2 = offset2;
+    INIT_INDEX2(n_dims)
     for (size_t i = 0; i < numel; ++i) {
         if (memcmp(dat1 + f_index1, dat2 + f_index2, elem_size)) {
             return 0;
         }
         ADVANCE_INDEX2(n_dims)
     }
-    free(index);
+    DESTROY_INDEX()
     return 1;
 }

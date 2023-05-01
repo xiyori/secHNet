@@ -1,7 +1,6 @@
 module Data.Tensor.Definitions where
 
 import Data.Vector.Storable (Storable, Vector)
-import Data.Tensor.Index
 
 import Foreign.C.Types
 
@@ -31,6 +30,41 @@ data (HasDtype t) =>
     -- | Internal data representation.
     tensorData :: !(Vector t)
   }
+
+-- | Tensor index @Vector CSize@.
+type Index = Vector CSize
+
+-- | Tensor stride @Vector CLLong@.
+type Stride = Vector CLLong
+
+-- | Slice data type.
+data Slice
+  -- | Single index @I index@.
+  = I CLLong
+  -- | Full slice, analogous to NumPy @:@.
+  | A
+  -- | Slice from start, analogous to NumPy @start:@.
+  | S CLLong
+  -- | Slice till end, analogous to NumPy @:end@.
+  | E CLLong
+  | CLLong  -- | Slice @start :. end@, analogous to
+          --   NumPy @start:end@.
+          :. CLLong
+  | Slice -- | Slice @S start :| step@, @E end :| step@
+          --   or @start :. end :| step@, analogous to
+          --   NumPy @start:end:step@.
+          :| CLLong
+  -- | Insert new dim, analogous to NumPy @None@.
+  | None
+  -- | Ellipses, analogous to NumPy @...@.
+  | Ell
+  deriving (Eq, Show)
+
+infixl 5 :.
+infixl 5 :|
+
+-- | Slice indexer data type.
+type Slices = [Slice]
 
 -- | Advanced indexer data type.
 type TensorIndex = [Tensor CLLong]

@@ -1,5 +1,3 @@
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
@@ -109,8 +107,8 @@ tensor shape builder =
 --   Signature: @shape -> fillValue -> tensor@
 full :: HasDtype t => Index -> t -> Tensor t
 full shape fillValue =
-  case V.replicate (fromIntegral $ totalElems shape) fillValue of {dat ->
-    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  case V.singleton fillValue of {dat ->
+    Tensor shape (V.replicate (V.length shape) 0) 0 dat
   }
 
 -- | Return a new tensor filled with zeros.
@@ -268,65 +266,6 @@ broadcast (Tensor shape1 stride1 offset1 dat1)
 -- (@) :: Num t => Tensor t -> Tensor t -> Tensor t
 -- (@) = dot
 
--- | True if two tensors have the same shape and elements, False otherwise.
-tensorEqual :: (HasDtype t) => Tensor t -> Tensor t -> Bool
-tensorEqual (Tensor shape stride1 offset1 dat1)
-            (Tensor shape2 stride2 offset2 dat2)
-  | shape == shape2 =
-    case sizeOfElem dat1 of {elemSize ->
-    case V.unsafeCast dat1 of {data1CChar ->
-    case V.unsafeCast dat2 of {data2CChar ->
-      toBool [CU.pure| int {
-        equal(
-          $vec-len:shape,
-          $vec-ptr:(size_t *shape),
-          $(size_t elemSize),
-          $vec-ptr:(long long *stride1),
-          $(size_t offset1),
-          $vec-ptr:(char *data1CChar),
-          $vec-ptr:(long long *stride2),
-          $(size_t offset2),
-          $vec-ptr:(char *data2CChar)
-        )
-      } |]
-    }}}
-  | otherwise = False
-
--- | Returns True if two arrays are element-wise equal within a tolerance.
-allCloseTol :: (HasDtype t, Floating t) => CDouble -> CDouble -> Tensor t -> Tensor t -> Bool
-allCloseTol rtol atol
-  x1@(Tensor shape stride1 offset1 dat1)
-     (Tensor shape2 stride2 offset2 dat2)
-  | shape == shape2 =
-    case tensorDtype x1 of {dtype ->
-    case V.unsafeCast dat1 of {data1CChar ->
-    case V.unsafeCast dat2 of {data2CChar ->
-      toBool [CU.pure| int {
-        tensor_allclose(
-          $(double rtol),
-          $(double atol),
-          $vec-len:shape,
-          $vec-ptr:(size_t *shape),
-          $(int dtype),
-          $vec-ptr:(long long *stride1),
-          $(size_t offset1),
-          $vec-ptr:(char *data1CChar),
-          $vec-ptr:(long long *stride2),
-          $(size_t offset2),
-          $vec-ptr:(char *data2CChar)
-        )
-      } |]
-    }}}
-  | otherwise = False
-
--- | Returns True if two arrays are element-wise equal within a default tolerance.
-allClose :: (HasDtype t, Floating t) => Tensor t -> Tensor t -> Bool
-allClose = allCloseTol 1e-05 1e-08
-
--- Return (x1 == x2) element-wise.
--- equal :: (HasDtype t) => Tensor t -> Tensor t -> Tensor CBool
--- equal
-
 -- | Perform elementwise operation without cheking
 --   for validity of arguments.
 --
@@ -365,7 +304,7 @@ elementwise f x1 x2 =
 -- Indexing
 -- --------
 
--- | Get element of a tensor without cheking for index validity.
+-- | Get element of a tensor without checking for index validity.
 --
 --   This function is not safe to use,
 --   consider using @(!)@ operator instead.
@@ -400,8 +339,9 @@ unsafeGetElem x@(Tensor shape stride offset dat) index =
       ++ show shape
   }
 
-slice :: (HasDtype t) => Tensor t -> Slices -> Tensor t
-slice x@(Tensor shape stride offset dat) slices =
+-- | Get slice of a tensor.
+(!:) :: (HasDtype t) => Tensor t -> Slices -> Tensor t
+(!:) x@(Tensor shape stride offset dat) slices =
   case parseSlices shape slices of {(dimsToInsert, slices) ->
     insertDims (Tensor (V.fromList $ Prelude.map (
       \ (start :. end :| step) -> fromIntegral $ (end - start) `div` step
@@ -429,15 +369,11 @@ slice x@(Tensor shape stride offset dat) slices =
     ) slices $ V.toList stride) dat) dimsToInsert
   }
 
--- | An infix synonym for slice.
-(!:) :: (HasDtype t) => Tensor t -> Slices -> Tensor t
-(!:) = slice
-
 -- validateTensorIndex :: TensorIndex -> Bool
 -- validateTensorIndex = allEqual . Prelude.map shape
 
--- advancedIndex :: (HasDtype t) => Tensor t -> TensorIndex -> Tensor t
--- advancedIndex x tensorIndex
+-- (!.) :: (HasDtype t) => Tensor t -> TensorIndex -> Tensor t
+-- (!.) x tensorIndex
 --   | validateTensorIndex tensorIndex =
 --     tensor (shape $ head tensorIndex) (
 --       \ index ->
@@ -449,9 +385,6 @@ slice x@(Tensor shape stride offset dat) slices =
 --     ++ show tensorIndex
 --     ++ " for shape "
 --     ++ show (shape x)
-
--- (!.) :: (HasDtype t) => Tensor t -> TensorIndex -> Tensor t
--- (!.) = advancedIndex
 
 -- | Return the value of a tensor with one element.
 item :: (HasDtype t) => Tensor t -> t
@@ -775,39 +708,24 @@ foldr' f accum x =
 
 {-# INLINE tensor #-}
 {-# INLINE full #-}
--- {-# INLINE zeros #-}
--- {-# INLINE ones #-}
--- {-# INLINE scalar #-}
--- {-# INLINE single #-}
 {-# INLINE randn #-}
 {-# INLINE randnM #-}
 {-# INLINE eye #-}
 
 {-# INLINE broadcast #-}
 -- {-# INLINE dot #-}
-{-# INLINE tensorEqual #-}
-{-# INLINE allCloseTol #-}
 {-# INLINE unsafeElementwise #-}
--- {-# INLINE elementwise #-}
 
 {-# INLINE unsafeGetElem #-}
-{-# INLINE slice #-}
+{-# INLINE (!:) #-}
 -- {-# INLINE advancedIndex #-}
--- {-# INLINE item #-}
 
--- {-# INLINE numel #-}
 {-# INLINE copy #-}
--- {-# INLINE transpose #-}
--- {-# INLINE flatten #-}
 {-# INLINE min #-}
 {-# INLINE max #-}
 {-# INLINE sum #-}
--- {-# INLINE mean #-}
 -- {-# INLINE sumAlongDim #-}
 -- {-# INLINE sumAlongDimKeepDims #-}
--- {-# INLINE insertDim #-}
--- {-# INLINE repeatAlongDim #-}
--- {-# INLINE swapDims #-}
 {-# INLINE map #-}
 {-# INLINE foldl' #-}
 {-# INLINE foldr' #-}

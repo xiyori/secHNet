@@ -25,6 +25,10 @@ C.context (C.baseCtx <> C.vecCtx)
 C.include "cbits/num_tensor.h"
 
 
+instance HasDtype CBool where
+  tensorDtype _ = 0
+  showDtype _ = "bool"
+
 instance HasDtype CChar where
   tensorDtype _ = 1
   showDtype _ = "int8"
@@ -109,9 +113,6 @@ instance HasArange CFloat where
 
 instance HasArange CDouble where
   arange = _rangeF
-
-instance HasDtype t => Eq (Tensor t) where
-  (==) = tensorEqual
 
 instance (HasDtype t, Num t) => Num (Tensor t) where
   (+) x1 x2 =

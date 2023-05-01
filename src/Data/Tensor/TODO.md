@@ -2,6 +2,11 @@
 - [x] arange
 - [x] FOLD macro for sum, min, max, ...
 - [x] fromList2, fromList3, ... 6
+- [x] boolean
+- [ ] refactor c code
+- [ ] astype
+- [ ] advancedIndex
+- [ ] assignments
 - [ ] sumAlongDim
 - [ ] shape and indexing unification?
 - [ ] concat, stack
