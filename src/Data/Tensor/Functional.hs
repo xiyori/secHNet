@@ -16,6 +16,7 @@ import System.Random
 import Data.Random.Normal
 import Data.Tensor.Index
 import Data.Tensor.Size
+import Data.Tensor.ListUtils
 import Data.Tensor.Definitions as T
 
 import System.IO.Unsafe
@@ -40,7 +41,57 @@ C.include "cbits/num_tensor.h"
 fromList :: HasDtype t => [t] -> Tensor t
 fromList listData =
   case parseShape1 listData of {shape ->
-  case V.fromList listData of {dat ->
+  case parseData1 listData of {dat ->
+    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  }}
+
+-- | Convert a list of lists to a 2-D tensor.
+--
+--   Signature: @list -> tensor@
+fromList2 :: HasDtype t => [[t]] -> Tensor t
+fromList2 listData =
+  case parseShape2 listData of {shape ->
+  case parseData2 listData of {dat ->
+    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  }}
+
+-- | Convert a list of lists to a 3-D tensor.
+--
+--   Signature: @list -> tensor@
+fromList3 :: HasDtype t => [[[t]]] -> Tensor t
+fromList3 listData =
+  case parseShape3 listData of {shape ->
+  case parseData3 listData of {dat ->
+    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  }}
+
+-- | Convert a list of lists to a 4-D tensor.
+--
+--   Signature: @list -> tensor@
+fromList4 :: HasDtype t => [[[[t]]]] -> Tensor t
+fromList4 listData =
+  case parseShape4 listData of {shape ->
+  case parseData4 listData of {dat ->
+    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  }}
+
+-- | Convert a list of lists to a 5-D tensor.
+--
+--   Signature: @list -> tensor@
+fromList5 :: HasDtype t => [[[[[t]]]]] -> Tensor t
+fromList5 listData =
+  case parseShape5 listData of {shape ->
+  case parseData5 listData of {dat ->
+    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  }}
+
+-- | Convert a list of lists to a 6-D tensor.
+--
+--   Signature: @list -> tensor@
+fromList6 :: HasDtype t => [[[[[[t]]]]]] -> Tensor t
+fromList6 listData =
+  case parseShape6 listData of {shape ->
+  case parseData6 listData of {dat ->
     Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
   }}
 
@@ -748,6 +799,8 @@ foldr' f accum x =
 {-# INLINE copy #-}
 -- {-# INLINE transpose #-}
 -- {-# INLINE flatten #-}
+{-# INLINE min #-}
+{-# INLINE max #-}
 {-# INLINE sum #-}
 -- {-# INLINE mean #-}
 -- {-# INLINE sumAlongDim #-}

@@ -16,6 +16,9 @@ import System.IO.Unsafe
 -- Functional
 -- ----------
 
+prop_fromList3 :: Bool
+prop_fromList3 = (fromList3 [[[], []], [[], []], [[], []]] :: Tensor CFloat) == zeros (V.fromList [3, 2, 0])
+
 prop_tensor0 :: Index -> Bool
 prop_tensor0 shape = tensor shape (const (0 :: CFloat)) == zeros shape
 

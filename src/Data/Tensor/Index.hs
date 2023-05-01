@@ -2,8 +2,7 @@
 
 module Data.Tensor.Index where
 
-import Data.Vector.Storable (generate, fromList, constructN, constructrN,
-                             Storable, Vector, (!), (//))
+import Data.Vector.Storable (Storable, Vector, (!), (//))
 import qualified Data.Vector.Storable as V
 import Data.List
 import System.IO.Unsafe
@@ -45,17 +44,13 @@ infixl 5 :|
 -- | Slice indexer data type.
 type Slices = [Slice]
 
--- | todo.
-parseShape1 :: [t] -> Index
-parseShape1 listData = V.singleton $ fromIntegral $ length listData
-
 -- | Coefficients for index flattening.
 --
 --   Signature: @sizeOfElem -> shape -> stride@
 computeStride :: CSize -> Index -> Stride
 computeStride sizeOfElem shape =
   case V.length shape of {len ->
-    constructrN len (
+    V.constructrN len (
       \ accum ->
         if V.null accum then
           fromIntegral sizeOfElem

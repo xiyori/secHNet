@@ -1,8 +1,8 @@
 - [x] EYE macro
 - [x] arange
 - [x] FOLD macro for sum, min, max, ...
-- [ ] fromList2, fromList3, ... 6
-- [ ] sumAlongSim
+- [x] fromList2, fromList3, ... 6
+- [ ] sumAlongDim
 - [ ] shape and indexing unification?
 - [ ] concat, stack
 - [ ] matmul

@@ -42,6 +42,7 @@ library
     exposed-modules:
         Data.Tensor.Index,
         Data.Tensor.Size,
+        Data.Tensor.ListUtils,
         Data.Tensor.Definitions,
         Data.Tensor.Functional,
         Data.Tensor.Instances,
