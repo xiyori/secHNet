@@ -1,26 +1,15 @@
 #include "num.h"
 
+#define SCALAR_ABS(arg) (arg < 0) ? -arg : arg
 #define SCALAR_SIGN(arg) (0 < arg) - (arg < 0)
-#define SCALAR_ADD(arg1, arg2) arg1 + arg2
-#define SCALAR_SUB(arg1, arg2) arg1 - arg2
-#define SCALAR_MULT(arg1, arg2) arg1 * arg2
+#define SCALAR_ADD(a, b) a + b
+#define SCALAR_SUB(a, b) a - b
+#define SCALAR_MULT(a, b) a * b
 
 
-MAP_ID(cbool, abs)
-MAP(int8, abs, abs)
-MAP_ID(uint8, abs)
-MAP(int16, abs, abs)
-MAP_ID(uint16, abs)
-MAP(int32, abs, abs)
-MAP_ID(uint32, abs)
-MAP(int64, abs, llabs)
-MAP_ID(uint64, abs)
-MAP(float32, abs, fabsf)
-MAP(float64, abs, fabs)
-FUNC_WRAPPER(FORALL_DTYPES, MAP, abs)
-
+FUNC(MAP, abs,  SCALAR_ABS)
 FUNC(MAP, sign, SCALAR_SIGN)
-FUNC(MAP, neg, -)
+FUNC(MAP, neg,  -)
 
 FUNC(ELEMENTWISE, add,  SCALAR_ADD)
 FUNC(ELEMENTWISE, sub,  SCALAR_SUB)

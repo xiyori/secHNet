@@ -12,7 +12,7 @@ tensor_##name ( \
     size_t offset, \
     dtype_t dtype, \
     char *dat_from, \
-    char *dat_to)
+    char * __restrict dat_to)
 
 #define MAP_GENERIC(dtype, name, dtype_to, function) \
 void \
@@ -74,26 +74,26 @@ name##_##dtype ( \
 #define MAP(dtype, name, function) \
 MAP_GENERIC(dtype, name, dtype, function)
 
-#define MAP_ID(dtype, name) \
-void \
-name##_##dtype ( \
-    int n_dims, \
-    size_t *shape, \
-    long long *stride, \
-    size_t offset, \
-    char *dat_from, \
-    char * __restrict dat_to) \
-{ \
-    copy( \
-        n_dims, \
-        shape, \
-        stride, \
-        offset, \
-        sizeof(dtype##_t), \
-        dat_from, \
-        dat_to \
-    ); \
-}
+// #define MAP_ID(dtype, name) \
+// void \
+// name##_##dtype ( \
+//     int n_dims, \
+//     size_t *shape, \
+//     long long *stride, \
+//     size_t offset, \
+//     char *dat_from, \
+//     char * __restrict dat_to) \
+// { \
+//     copy( \
+//         n_dims, \
+//         shape, \
+//         stride, \
+//         offset, \
+//         sizeof(dtype##_t), \
+//         dat_from, \
+//         dat_to \
+//     ); \
+// }
 
 #define MAP_CASE(dtype, name) \
 case dtype##_d: \
@@ -106,7 +106,5 @@ case dtype##_d: \
         dat_to \
     ); \
     break;
-
-#define MAP_FUNC_MATH(name) FUNC_MATH(MAP, name)
 
 #endif

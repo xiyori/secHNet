@@ -3,6 +3,11 @@
 
 #include "../core/core.h"
 
+# define EMPTY(...)
+# define DEFER(...) __VA_ARGS__ EMPTY()
+# define OBSTRUCT(...) __VA_ARGS__ DEFER(EMPTY)()
+# define EXPAND(...) __VA_ARGS__
+
 #define FOR_BOOL(expr, ...) \
 expr(cbool, __VA_ARGS__)
 
@@ -30,6 +35,8 @@ macro##_PROTO(name) \
 { \
     switch(dtype) { \
         dtype_iterator(macro##_CASE, name) \
+        default: \
+            exit(1); \
     } \
 }
 
@@ -46,6 +53,13 @@ FUNC_WRAPPER(FORALL_DTYPES, macro, name)
 #define FUNC_INT_FLOAT(macro, name, function) \
 FORALL_INT_DTYPES(macro, name, function##_INT) \
 FORALL_FLOAT_DTYPES(macro, name, function##_FLOAT) \
+\
+FUNC_WRAPPER(FORALL_DTYPES, macro, name)
+
+#define FUNC_INT_FLOAT32_64(macro, name, function) \
+FORALL_INT_DTYPES(macro, name, function##_INT) \
+macro(float32, name, function##_FLOAT32) \
+macro(float64, name, function##_FLOAT64) \
 \
 FUNC_WRAPPER(FORALL_DTYPES, macro, name)
 

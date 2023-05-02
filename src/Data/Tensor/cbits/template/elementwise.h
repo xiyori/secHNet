@@ -15,7 +15,7 @@ tensor_##name ( \
     long long *stride2, \
     size_t offset2, \
     char *dat_from2, \
-    char *dat_to)
+    char * __restrict dat_to)
 
 #define ELEMENTWISE_GENERIC(dtype, name, dtype_to, operator) \
 void \

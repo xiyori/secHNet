@@ -26,6 +26,8 @@ import Data.Tensor (
       onesLike,
       eye,
       broadcast,
+      (//),
+      (%),
       elementwise,
       (!),
       (!:),
@@ -33,6 +35,7 @@ import Data.Tensor (
       numel,
       mean,
       copy,
+      astype,
       transpose,
       flatten,
       view,
@@ -83,6 +86,34 @@ prop_elementwise_commutative :: Gen Bool
 prop_elementwise_commutative = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
   return $ elementwise (+) x1 x2 `allClose` elementwise (+) x2 x1
+
+prop_int_div :: Gen Bool  -- Fails with arithmetic overflow, extremely rare
+prop_int_div = do
+  (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CChar, Tensor CChar)
+  case broadcast x1 x2 of {(x1b, x2b) ->
+    return $ x1 // x2 `equal` elementwise div x1 x2
+  }
+
+prop_int_div_float :: Gen Bool
+prop_int_div_float = do
+  (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
+  case broadcast x1 x2 of {(x1b, x2b) ->
+    return $ x1 // x2 `equal` elementwise (\ a b -> fromIntegral $ floor $ a / b) x1 x2
+  }
+
+prop_mod :: Gen Bool
+prop_mod = do
+  (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CChar, Tensor CChar)
+  case broadcast x1 x2 of {(x1b, x2b) ->
+    return $ x1 % x2 `equal` elementwise mod x1 x2
+  }
+
+prop_mod_float :: Gen Bool
+prop_mod_float = do
+  (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
+  case broadcast x1 x2 of {(x1b, x2b) ->
+    return $ x1 % x2 `equal` elementwise (\ a b -> a - b * fromIntegral (floor $ a / b)) x1 x2
+  }
 
 prop_getelem :: Index -> Bool
 prop_getelem shape
@@ -201,6 +232,19 @@ prop_copy_numel :: Tensor CFloat -> Bool
 prop_copy_numel x = fromIntegral (numel x1) == V.length (tensorData x1)
   where
     x1 = copy x
+
+prop_astype :: Tensor CFloat -> Bool
+prop_astype x = (astype x :: Tensor CLLong) `equal` T.map (
+    \ value ->
+      if value < 0 then
+        ceiling value
+      else floor value
+  ) x
+
+prop_astype_uint :: Tensor CFloat -> Bool
+prop_astype_uint x = (astype xLL :: Tensor CULLong) `equal` T.map fromIntegral xLL
+  where
+    xLL = astype x :: Tensor CLLong
 
 prop_transpose_id :: Tensor CFloat -> Bool
 prop_transpose_id x = transpose (transpose x1) `equal` x1
@@ -335,11 +379,13 @@ prop_max x
   | otherwise =
     True
 
--- prop_sum :: Tensor CFloat -> Bool
--- prop_sum x = T.sum x == T.foldl' (+) 0 x
+prop_sum :: Index -> Bool
+prop_sum shape = T.sum (ones shape :: Tensor CFloat) == fromIntegral (totalElems shape)
 
-prop_sum_ones :: Index -> Bool
-prop_sum_ones shape = T.sum (ones shape :: Tensor CFloat) == fromIntegral (totalElems shape)
+prop_sum_int :: Tensor CFloat -> Bool
+prop_sum_int x = T.sum xI == T.foldl' (+) 0 xI
+  where
+    xI = astype x :: Tensor CLLong
 
 prop_sum_distributive :: Index -> Gen Bool
 prop_sum_distributive shape = do

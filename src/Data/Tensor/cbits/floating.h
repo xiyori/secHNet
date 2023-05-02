@@ -17,9 +17,7 @@ expr(asinh) \
 expr(acosh) \
 expr(atanh)
 
-#define MAP_PROTO_SEMICOLON(name) \
-MAP_PROTO(name);
-
+#define MAP_PROTO_SEMICOLON(name) MAP_PROTO(name);
 
 FORALL_MATH(MAP_PROTO_SEMICOLON)
 

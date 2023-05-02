@@ -1,11 +1,11 @@
 #include "boolean.h"
 
-#define SCALAR_EQUAL(arg1, arg2) arg1 == arg2
-#define SCALAR_NOT_EQUAL(arg1, arg2) arg1 != arg2
-#define SCALAR_GREATER(arg1, arg2) arg1 > arg2
-#define SCALAR_LESS(arg1, arg2) arg1 < arg2
-#define SCALAR_GEQ(arg1, arg2) arg1 >= arg2
-#define SCALAR_LEQ(arg1, arg2) arg1 <= arg2
+#define SCALAR_EQUAL(a, b) a == b
+#define SCALAR_NOT_EQUAL(a, b) a != b
+#define SCALAR_GREATER(a, b) a > b
+#define SCALAR_LESS(a, b) a < b
+#define SCALAR_GEQ(a, b) a >= b
+#define SCALAR_LEQ(a, b) a <= b
 
 #define SCALAR_NOT(arg) !arg
 

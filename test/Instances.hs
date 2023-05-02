@@ -7,13 +7,13 @@ import Control.Monad
 import Data.Vector.Storable (Storable, Vector, (//))
 import qualified Data.Vector.Storable as V
 import System.Random
-import Data.Tensor as T (Tensor, HasDtype, randn, (!:), Slices, Slice((:.), (:|)), Index)
+import Data.Tensor as T (Tensor, HasDtype, randRange, map, (!:), Slices, Slice((:.), (:|)), Index)
 import Test.QuickCheck
 
 import Foreign.C.Types
 
 
-instance (HasDtype t, Random t, Floating t) => Arbitrary (Tensor t) where
+instance (HasDtype t, UniformRange t, Num t, Eq t) => Arbitrary (Tensor t) where
   arbitrary :: Gen (Tensor t)
   arbitrary = do
     shape <- arbitrary
@@ -26,7 +26,7 @@ instance Arbitrary Index where
     list <- vectorOf nDims $ chooseEnum (0, 10)
     return $ V.fromList list
 
-arbitraryWithShape :: (HasDtype t, Random t, Floating t) =>
+arbitraryWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>
   Index -> Gen (Tensor t)
 arbitraryWithShape shape = do
   isContiguous <- chooseAny
@@ -60,22 +60,30 @@ arbitrarySlices shape expandedShape =
   ) (V.toList $ V.map fromIntegral shape)
     (V.toList $ V.map fromIntegral expandedShape)
 
-arbitraryContiguousWithShape :: (HasDtype t, Random t, Floating t) =>
+arbitraryContiguousWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>
   Index -> Gen (Tensor t)
 arbitraryContiguousWithShape shape = do
   seed <- chooseAny
   case mkStdGen seed of {gen ->
-    return $ fst $ randn shape gen
+    return
+    $ T.map (
+      \ value ->
+        if value == 0 then
+          1
+        else value
+    )
+    $ fst
+    $ randRange shape (-128, 127) gen
   }
 
-arbitraryPairWithShape :: (HasDtype t, Random t, Floating t) =>
+arbitraryPairWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>
   Index -> Gen (Tensor t, Tensor t)
 arbitraryPairWithShape shape = do
   x1 <- arbitraryWithShape shape
   x2 <- arbitraryWithShape shape
   return (x1, x2)
 
-arbitraryBroadcastablePair :: (HasDtype t, Random t, Floating t) =>
+arbitraryBroadcastablePair :: (HasDtype t, UniformRange t, Num t, Eq t) =>
   Gen (Tensor t, Tensor t)
 arbitraryBroadcastablePair = do
   (shape1, shape2) <- arbitraryBroadcastableShapes

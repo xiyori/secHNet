@@ -168,3 +168,16 @@ parseData6 listData =
   $ concat
   $ concat
   $ concat listData
+
+{-# INLINE parseShape1 #-}
+{-# INLINE parseShape2 #-}
+{-# INLINE parseShape3 #-}
+{-# INLINE parseShape4 #-}
+{-# INLINE parseShape5 #-}
+{-# INLINE parseShape6 #-}
+{-# INLINE parseData1 #-}
+{-# INLINE parseData2 #-}
+{-# INLINE parseData3 #-}
+{-# INLINE parseData4 #-}
+{-# INLINE parseData5 #-}
+{-# INLINE parseData6 #-}

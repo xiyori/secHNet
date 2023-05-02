@@ -77,9 +77,11 @@ library
       , src/Data/Tensor/cbits/num.c
       , src/Data/Tensor/cbits/fractional.c
       , src/Data/Tensor/cbits/floating.c
+      , src/Data/Tensor/cbits/integral.c
       , src/Data/Tensor/cbits/fold.c
       , src/Data/Tensor/cbits/boolean.c
       , src/Data/Tensor/cbits/construct.c
+      , src/Data/Tensor/cbits/convert.c
     cc-options: -O3 -mno-vzeroupper
     ghc-options: -funbox-strict-fields -fforce-recomp
 

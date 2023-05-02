@@ -3,8 +3,9 @@
 - [x] FOLD macro for sum, min, max, ...
 - [x] fromList2, fromList3, ... 6
 - [x] boolean
-- [ ] refactor c code
-- [ ] astype
+- [x] refactor c code
+- [x] astype
+- [x] integer division, mod
 - [ ] advancedIndex
 - [ ] assignments
 - [ ] sumAlongDim
