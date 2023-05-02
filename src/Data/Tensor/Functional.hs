@@ -26,8 +26,9 @@ import qualified Language.C.Inline.Unsafe as CU
 -- Use vector anti-quoters.
 C.context (C.baseCtx <> C.vecCtx)
 -- Include C utils.
-C.include "cbits/cbits.h"
-C.include "cbits/num_tensor.h"
+C.include "cbits/core/core.h"
+C.include "cbits/fold.h"
+C.include "cbits/construct.h"
 
 
 -- Construction

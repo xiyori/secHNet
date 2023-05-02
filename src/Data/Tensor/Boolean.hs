@@ -21,7 +21,7 @@ import qualified Language.C.Inline.Unsafe as CU
 -- Use vector anti-quoters.
 C.context (C.baseCtx <> C.vecCtx)
 -- Include C utils.
-C.include "cbits/num_tensor.h"
+C.include "cbits/boolean.h"
 
 
 -- | Return True if two tensors have the same shape and elements.

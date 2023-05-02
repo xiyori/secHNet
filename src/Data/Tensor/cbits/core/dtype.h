@@ -1,52 +1,8 @@
-#ifndef CBITS_H
-#define CBITS_H
+#ifndef CORE_DTYPE_H
+#define CORE_DTYPE_H
 
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
-
-// -- Index
-// -- -----
-
-#define INIT_INDEX(n_dims) \
-    size_t *index = calloc(n_dims, sizeof(size_t)); \
-    size_t numel = total_elems(n_dims, shape); \
-    size_t f_index = offset;
-
-#define INIT_INDEX2(n_dims) \
-    size_t *index = calloc(n_dims, sizeof(size_t)); \
-    size_t numel = total_elems(n_dims, shape); \
-    size_t f_index1 = offset1; \
-    size_t f_index2 = offset2;
-
-#define ADVANCE_INDEX(n_dims) \
-for (int dim = n_dims - 1; dim >= 0; --dim) { \
-    index[dim] += 1; \
-    f_index += stride[dim]; \
-    if (index[dim] == shape[dim]) { \
-        index[dim] = 0; \
-        f_index -= stride[dim] * shape[dim]; \
-    } else { \
-        break; \
-    } \
-}
-
-#define ADVANCE_INDEX2(n_dims) \
-for (int dim = n_dims - 1; dim >= 0; --dim) { \
-    index[dim] += 1; \
-    f_index1 += stride1[dim]; \
-    f_index2 += stride2[dim]; \
-    if (index[dim] == shape[dim]) { \
-        index[dim] = 0; \
-        f_index1 -= stride1[dim] * shape[dim]; \
-        f_index2 -= stride2[dim] * shape[dim]; \
-    } else { \
-        break; \
-    } \
-}
-
-#define DESTROY_INDEX() free(index);
 
 
 // -- Vectorized size
@@ -129,49 +85,5 @@ typedef enum {
     float32_d,
     float64_d
 } dtype_t;
-
-
-size_t
-flatten_index(
-    int n_dims,
-    long long *stride,
-    size_t offset,
-    size_t *index);
-
-char *
-get_elem(
-    int n_dims,
-    long long *stride,
-    size_t offset,
-    dtype_t dtype,
-    char *dat,
-    size_t *index);
-
-size_t
-total_elems (
-    int n_dims,
-    size_t *shape);
-
-void
-copy (
-    int n_dims,
-    size_t *shape,
-    long long *stride,
-    size_t offset,
-    size_t elem_size,
-    char *dat_from,
-    char * __restrict dat_to);
-
-int
-equal (
-    int n_dims,
-    size_t *shape,
-    size_t elem_size,
-    long long *stride1,
-    size_t offset1,
-    char *dat1,
-    long long *stride2,
-    size_t offset2,
-    char *dat2);
 
 #endif

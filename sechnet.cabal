@@ -73,8 +73,13 @@ library
     hs-source-dirs:   src
     default-language: Haskell2010
     C-sources:
-      src/Data/Tensor/cbits/cbits.c
-      , src/Data/Tensor/cbits/num_tensor.c
+      src/Data/Tensor/cbits/core/core.c
+      , src/Data/Tensor/cbits/num.c
+      , src/Data/Tensor/cbits/fractional.c
+      , src/Data/Tensor/cbits/floating.c
+      , src/Data/Tensor/cbits/fold.c
+      , src/Data/Tensor/cbits/boolean.c
+      , src/Data/Tensor/cbits/construct.c
     cc-options: -O3 -mno-vzeroupper
     ghc-options: -funbox-strict-fields -fforce-recomp
 

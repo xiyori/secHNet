@@ -22,7 +22,9 @@ import qualified Language.C.Inline.Unsafe as CU
 -- Use vector anti-quoters.
 C.context (C.baseCtx <> C.vecCtx)
 -- Include C utils.
-C.include "cbits/num_tensor.h"
+C.include "cbits/num.h"
+C.include "cbits/fractional.h"
+C.include "cbits/floating.h"
 
 
 instance HasDtype CBool where
