@@ -319,7 +319,7 @@ broadcast (Tensor shape1 stride1 offset1 dat1)
         mutableData <- VM.new $ fromIntegral $ totalElems shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
-            tensor_int_div(
+            tensor_floor_div(
               $vec-len:shape,
               $vec-ptr:(size_t *shape),
               $(int dtype),

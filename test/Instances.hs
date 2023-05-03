@@ -7,7 +7,7 @@ import Control.Monad
 import Data.Vector.Storable (Storable, Vector, (//))
 import qualified Data.Vector.Storable as V
 import System.Random
-import Data.Tensor as T (Tensor, HasDtype, randRange, map, (!:), Slices, Slice((:.), (:|)), Index)
+import Data.Tensor as T (Tensor, HasDtype, full, randRange, map, (!:), Slices, Slice((:.), (:|)), Index)
 import Test.QuickCheck
 
 import Foreign.C.Types
@@ -33,14 +33,21 @@ arbitraryWithShape shape = do
   if isContiguous then
     arbitraryContiguousWithShape shape
   else do
-    expandedShape <- V.mapM (
-      \ dim -> do
-        addDim <- chooseEnum (0, 10)
-        return $ dim + addDim
-      ) shape
-    slices <- arbitrarySlices shape expandedShape
-    x <- arbitraryContiguousWithShape expandedShape
-    return $ x !: slices
+    isUniform <- chooseAny
+    if isUniform then do
+      value <- chooseInt (-127, 127)
+      if value == 0 then
+        return $ full shape (-128)
+      else return $ full shape $ fromIntegral value
+    else do
+      expandedShape <- V.mapM (
+        \ dim -> do
+          addDim <- chooseEnum (0, 10)
+          return $ dim + addDim
+        ) shape
+      slices <- arbitrarySlices shape expandedShape
+      x <- arbitraryContiguousWithShape expandedShape
+      return $ x !: slices
 
 -- arbitraryWithShape :: (HasDtype t, Random t, Floating t) =>
 --   Vector CInt -> Gen (Tensor t)
@@ -69,11 +76,11 @@ arbitraryContiguousWithShape shape = do
     $ T.map (
       \ value ->
         if value == 0 then
-          1
+          -128
         else value
     )
     $ fst
-    $ randRange shape (-128, 127) gen
+    $ randRange shape (-127, 127) gen
   }
 
 arbitraryPairWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>

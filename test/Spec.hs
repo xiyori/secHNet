@@ -66,6 +66,77 @@ prop_scalar value = item (scalar value) == value
 prop_single :: CFloat -> Bool
 prop_single value = item (single value) == value
 
+prop_eye_unit :: Bool
+prop_eye_unit = x ! [0, 0] == 1 && x ! [1, 1] == 1 && x ! [0, 1] == 0 && x ! [1, 0] == 0
+  where
+    x = eye 2 2 0 :: Tensor CFloat
+
+prop_eye_transpose0_unit :: Bool
+prop_eye_transpose0_unit = transpose x `equal` x
+  where
+    x = eye 3 3 0 :: Tensor CFloat
+
+prop_eye_transpose1_unit :: Bool
+prop_eye_transpose1_unit = not $ transpose x `equal` x
+  where
+    x = eye 3 3 1 :: Tensor CFloat
+
+prop_arange :: Index -> Bool
+prop_arange shape
+  | totalElems shape /= 0 =
+    flatten (tensor shape fromIntegral) `equal`
+    arange (0 :: CFloat) (fromIntegral $ totalElems shape) 1
+  | otherwise =
+    True
+
+prop_arange_neg :: Index -> Bool
+prop_arange_neg shape
+  | totalElems shape /= 0 =
+    flatten (tensor shape $ negate . fromIntegral) `allClose`
+    arange (0 :: CFloat) (-(fromIntegral $ totalElems shape)) (-1)
+  | otherwise =
+    True
+
+prop_arange_single :: Bool
+prop_arange_single = (arange 0 1 2 :: Tensor CFloat) `equal` single 0
+
+prop_arange_single_neg :: Bool
+prop_arange_single_neg = (arange 0 (-1) (-2) :: Tensor CFloat) `equal` single 0
+
+prop_arange_empty :: Bool
+prop_arange_empty = (arange 0 (-1) 1 :: Tensor CFloat) `equal` zeros (V.singleton 0)
+
+prop_arange_empty_neg :: Bool
+prop_arange_empty_neg = (arange 0 1 (-1) :: Tensor CFloat) `equal` zeros (V.singleton 0)
+
+prop_arange_int :: Index -> Bool
+prop_arange_int shape
+  | totalElems shape /= 0 =
+    flatten (tensor shape fromIntegral) `equal`
+    arange (0 :: CLLong) (fromIntegral $ totalElems shape) 1
+  | otherwise =
+    True
+
+prop_arange_neg_int :: Index -> Bool
+prop_arange_neg_int shape
+  | totalElems shape /= 0 =
+    flatten (tensor shape $ negate . fromIntegral) `equal`
+    arange (0 :: CLLong) (-(fromIntegral $ totalElems shape)) (-1)
+  | otherwise =
+    True
+
+prop_arange_single_int :: Bool
+prop_arange_single_int = (arange 0 1 2 :: Tensor CLLong) `equal` single 0
+
+prop_arange_single_neg_int :: Bool
+prop_arange_single_neg_int = (arange 0 (-1) (-2) :: Tensor CLLong) `equal` single 0
+
+prop_arange_empty_int :: Bool
+prop_arange_empty_int = (arange 0 (-1) 1 :: Tensor CLLong) `equal` zeros (V.singleton 0)
+
+prop_arange_empty_neg_int :: Bool
+prop_arange_empty_neg_int = (arange 0 1 (-1) :: Tensor CLLong) `equal` zeros (V.singleton 0)
+
 prop_broadcast_scalar :: Tensor CFloat -> Bool
 prop_broadcast_scalar x = shape (snd $ broadcast x (scalar (0 :: CFloat))) == shape x
 
@@ -87,7 +158,7 @@ prop_elementwise_commutative = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
   return $ elementwise (+) x1 x2 `allClose` elementwise (+) x2 x1
 
-prop_int_div :: Gen Bool  -- Fails with arithmetic overflow, extremely rare
+prop_int_div :: Gen Bool  -- Fails with arithmetic overflow for *_MIN or *_MAX ?
 prop_int_div = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CChar, Tensor CChar)
   case broadcast x1 x2 of {(x1b, x2b) ->
@@ -222,6 +293,45 @@ prop_numel shape = fromIntegral (numel x) == V.length (tensorData x)
   where
     x = copy $ zeros shape :: Tensor CFloat
 
+prop_min :: Tensor CDouble -> Bool
+prop_min x
+  | numel x /= 0 =
+    T.min x == T.foldl' min (1 / 0) x
+  | otherwise =
+    True
+
+prop_max :: Tensor CDouble -> Bool
+prop_max x
+  | numel x /= 0 =
+    T.max x == T.foldl' max (-1 / 0) x
+  | otherwise =
+    True
+
+prop_sum :: Index -> Bool
+prop_sum shape = T.sum (ones shape :: Tensor CFloat) == fromIntegral (totalElems shape)
+
+prop_sum_int :: Tensor CFloat -> Bool
+prop_sum_int x = T.sum xI == T.foldl' (+) 0 xI
+  where
+    xI = astype x :: Tensor CLLong
+
+prop_sum_distributive :: Index -> Gen Bool
+prop_sum_distributive shape = do
+  (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CDouble, Tensor CDouble)
+  return $ scalar (T.sum x1 + T.sum x2) `allClose` scalar (T.sum (x1 + x2))
+
+prop_sum_empty :: Index -> Bool
+prop_sum_empty shape = T.sum (ones $ V.snoc shape 0) == (0 :: CFloat)
+
+prop_sum_scalar :: Bool
+prop_sum_scalar = T.sum (scalar 1) == (1 :: CFloat)
+
+prop_sum_single :: Bool
+prop_sum_single = T.sum (single 1) == (1 :: CFloat)
+
+prop_mean_empty :: Index -> Bool
+prop_mean_empty shape = isNaN $ T.mean (ones $ V.snoc shape 0 :: Tensor CFloat)
+
 prop_copy :: Tensor CFloat -> Bool
 prop_copy x = x `equal` copy x
 
@@ -331,78 +441,8 @@ prop_or shape = (ones shape |. ones shape) `equal` (ones shape :: Tensor CBool) 
                 (zeros shape |. zeros shape) `equal` (zeros shape :: Tensor CBool)
 
 
--- FloatTensor
--- -----------
-
-prop_eye_unit :: Bool
-prop_eye_unit = x ! [0, 0] == 1 && x ! [1, 1] == 1 && x ! [0, 1] == 0 && x ! [1, 0] == 0
-  where
-    x = eye 2 2 0 :: Tensor CFloat
-
-prop_eye_transpose0_unit :: Bool
-prop_eye_transpose0_unit = transpose x `equal` x
-  where
-    x = eye 3 3 0 :: Tensor CFloat
-
-prop_eye_transpose1_unit :: Bool
-prop_eye_transpose1_unit = not $ transpose x `equal` x
-  where
-    x = eye 3 3 1 :: Tensor CFloat
-
-prop_arange :: Index -> Bool
-prop_arange shape
-  | totalElems shape /= 0 =
-    flatten (tensor shape fromIntegral) `equal`
-    arange (0 :: CFloat) (fromIntegral $ totalElems shape) 1
-  | otherwise =
-    True
-
-prop_arange_neg :: Index -> Bool
-prop_arange_neg shape
-  | totalElems shape /= 0 =
-    flatten (tensor shape $ negate . fromIntegral) `allClose`
-    arange (0 :: CFloat) (-(fromIntegral $ totalElems shape)) (-1)
-  | otherwise =
-    True
-
-prop_min :: Tensor CDouble -> Bool
-prop_min x
-  | numel x /= 0 =
-    T.min x == T.foldl' min (1 / 0) x
-  | otherwise =
-    True
-
-prop_max :: Tensor CDouble -> Bool
-prop_max x
-  | numel x /= 0 =
-    T.max x == T.foldl' max (-1 / 0) x
-  | otherwise =
-    True
-
-prop_sum :: Index -> Bool
-prop_sum shape = T.sum (ones shape :: Tensor CFloat) == fromIntegral (totalElems shape)
-
-prop_sum_int :: Tensor CFloat -> Bool
-prop_sum_int x = T.sum xI == T.foldl' (+) 0 xI
-  where
-    xI = astype x :: Tensor CLLong
-
-prop_sum_distributive :: Index -> Gen Bool
-prop_sum_distributive shape = do
-  (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CDouble, Tensor CDouble)
-  return $ scalar (T.sum x1 + T.sum x2) `allClose` scalar (T.sum (x1 + x2))
-
-prop_sum_empty :: Index -> Bool
-prop_sum_empty shape = T.sum (ones $ V.snoc shape 0) == (0 :: CFloat)
-
-prop_sum_scalar :: Bool
-prop_sum_scalar = T.sum (scalar 1) == (1 :: CFloat)
-
-prop_sum_single :: Bool
-prop_sum_single = T.sum (single 1) == (1 :: CFloat)
-
-prop_mean_empty :: Index -> Bool
-prop_mean_empty shape = isNaN $ T.mean (ones $ V.snoc shape 0 :: Tensor CFloat)
+-- NumTensor
+-- ---------
 
 prop_abs :: Index -> Bool
 prop_abs shape = abs x `equal` x

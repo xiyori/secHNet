@@ -73,13 +73,13 @@ instance HasDtype CDouble where
 
 _rangeF :: (HasDtype t, RealFrac t) => t -> t -> t -> Tensor t
 _rangeF low high step =
-  tensor (V.singleton $ floor $ (high - low) / step) (
+  tensor (V.singleton $ ceiling $ Prelude.max 0 $ (high - low) / step) (
     \ fIndex -> low + step * fromIntegral fIndex
   )
 
 _rangeI :: (HasDtype t, Integral t) => t -> t -> t -> Tensor t
 _rangeI low high step =
-  tensor (V.singleton $ fromIntegral $ (high - low) `div` step) (
+  tensor (V.singleton $ fromIntegral $ Prelude.max 0 $ -((low - high) `div` step)) (
     \ fIndex -> low + step * fromIntegral fIndex
   )
 

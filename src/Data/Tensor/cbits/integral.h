@@ -3,7 +3,7 @@
 
 #include "template/elementwise.h"
 
-ELEMENTWISE_PROTO(int_div);
+ELEMENTWISE_PROTO(floor_div);
 ELEMENTWISE_PROTO(mod);
 
 #endif
