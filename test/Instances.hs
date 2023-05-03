@@ -7,7 +7,7 @@ import Control.Monad
 import Data.Vector.Storable (Storable, Vector, (//))
 import qualified Data.Vector.Storable as V
 import System.Random
-import Data.Tensor as T (Tensor, HasDtype, full, randRange, map, (!:), Slices, Slice((:.), (:|)), Index)
+import Data.Tensor as T (Tensor, HasDtype, full, randRange, map, (!:), Indexers, Indexer(I, (:.)), Shape)
 import Test.QuickCheck
 
 import Foreign.C.Types
@@ -19,15 +19,15 @@ instance (HasDtype t, UniformRange t, Num t, Eq t) => Arbitrary (Tensor t) where
     shape <- arbitrary
     arbitraryWithShape shape
 
-instance Arbitrary Index where
-  arbitrary :: Gen Index
+instance Arbitrary Shape where
+  arbitrary :: Gen Shape
   arbitrary = do
     nDims <- chooseInt (0, 4)
     list <- vectorOf nDims $ chooseEnum (0, 10)
     return $ V.fromList list
 
 arbitraryWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>
-  Index -> Gen (Tensor t)
+  Shape -> Gen (Tensor t)
 arbitraryWithShape shape = do
   isContiguous <- chooseAny
   if isContiguous then
@@ -53,7 +53,7 @@ arbitraryWithShape shape = do
 --   Vector CInt -> Gen (Tensor t)
 -- arbitraryWithShape = arbitraryContiguousWithShape
 
-arbitrarySlices :: Index -> Index -> Gen Slices
+arbitrarySlices :: Shape -> Shape -> Gen Indexers
 arbitrarySlices shape expandedShape =
   zipWithM (
     \ dim expDim -> do
@@ -61,14 +61,14 @@ arbitrarySlices shape expandedShape =
       isNegative <- chooseAny
       return $
         if isNegative then
-          -(start + 1) :. -(start + dim + 1) :| -1
+          I (-(start + 1)) :. -(start + dim + 1) :. -1
         else
-          start :. start + dim
+          I start :. start + dim
   ) (V.toList $ V.map fromIntegral shape)
     (V.toList $ V.map fromIntegral expandedShape)
 
 arbitraryContiguousWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>
-  Index -> Gen (Tensor t)
+  Shape -> Gen (Tensor t)
 arbitraryContiguousWithShape shape = do
   seed <- chooseAny
   case mkStdGen seed of {gen ->
@@ -84,7 +84,7 @@ arbitraryContiguousWithShape shape = do
   }
 
 arbitraryPairWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>
-  Index -> Gen (Tensor t, Tensor t)
+  Shape -> Gen (Tensor t, Tensor t)
 arbitraryPairWithShape shape = do
   x1 <- arbitraryWithShape shape
   x2 <- arbitraryWithShape shape
@@ -98,7 +98,7 @@ arbitraryBroadcastablePair = do
   x2 <- arbitraryWithShape shape2
   return (x1, x2)
 
-arbitraryBroadcastableShapes :: Gen (Index, Index)
+arbitraryBroadcastableShapes :: Gen (Shape, Shape)
 arbitraryBroadcastableShapes = do
   shape <- arbitrary
   seed <- chooseAny

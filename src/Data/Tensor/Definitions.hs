@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module Data.Tensor.Definitions where
 
 import Data.Vector.Storable (Storable, Vector)
@@ -22,23 +25,23 @@ class (HasDtype t, Num t) => HasArange t where
 data (HasDtype t) =>
   Tensor t = Tensor {
     -- | Tensor shape.
-    shape :: !Index,
+    shape :: !Shape,
     -- | Data stride in bytes, analogous to NumPy array stride.
-    tensorStride :: !Stride,
+    tensorStride :: !Index,
     -- | Data offset in bytes.
     tensorOffset :: !CSize,
     -- | Internal data representation.
     tensorData :: !(Vector t)
   }
 
--- | Tensor index @Vector CSize@.
-type Index = Vector CSize
+-- | Tensor shape @Vector CSize@.
+type Shape = Vector CSize
 
--- | Tensor stride @Vector CLLong@.
-type Stride = Vector CLLong
+-- | Tensor index and stride @Vector CLLong@.
+type Index = Vector CLLong
 
--- | Slice data type.
-data Slice
+-- | Indexer data type.
+data Indexer
   -- | Single index @I index@.
   = I CLLong
   -- | Full slice, analogous to NumPy @:@.
@@ -47,24 +50,18 @@ data Slice
   | S CLLong
   -- | Slice till end, analogous to NumPy @:end@.
   | E CLLong
-  | CLLong  -- | Slice @start :. end@, analogous to
-          --   NumPy @start:end@.
+  | Indexer -- | Slice @I start :. end@, @S start :. step@,
+          --   @E end :. step@ or @start :. end :. step@,
+          --   analogous to NumPy @start:end:step@.
           :. CLLong
-  | Slice -- | Slice @S start :| step@, @E end :| step@
-          --   or @start :. end :| step@, analogous to
-          --   NumPy @start:end:step@.
-          :| CLLong
+  -- | Tensor index (advanced indexing).
+  | T (Tensor CLLong)
   -- | Insert new dim, analogous to NumPy @None@.
   | None
   -- | Ellipses, analogous to NumPy @...@.
   | Ell
-  deriving (Eq, Show)
 
 infixl 5 :.
-infixl 5 :|
 
 -- | Slice indexer data type.
-type Slices = [Slice]
-
--- | Advanced indexer data type.
-type TensorIndex = [Tensor CLLong]
+type Indexers = [Indexer]

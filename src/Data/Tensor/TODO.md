@@ -7,9 +7,10 @@
 - [x] astype
 - [x] integer division, mod
 - [ ] advancedIndex
-- [ ] assignments
 - [ ] sumAlongDim
-- [ ] shape and indexing unification?
-- [ ] concat, stack
 - [ ] matmul
 - [ ] conv
+- [ ] concat, stack
+- [ ] assignments
+- [ ] isin
+- [ ] shape and indexing unification ?

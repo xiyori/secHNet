@@ -8,7 +8,7 @@ import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
 import Data.List
-import Data.Tensor.Index
+import Data.Tensor.PlainIndex
 import Data.Tensor.Size
 import Data.Tensor.Definitions
 import Data.Tensor.Functional as T

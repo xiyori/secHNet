@@ -6,7 +6,7 @@ module Data.Tensor.Boolean where
 import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
-import Data.Tensor.Index
+import Data.Tensor.PlainIndex
 import Data.Tensor.Size
 import Data.Tensor.Definitions
 import Data.Tensor.Functional as T
@@ -23,6 +23,9 @@ C.context (C.baseCtx <> C.vecCtx)
 -- Include C utils.
 C.include "cbits/boolean.h"
 
+
+instance (HasDtype t, Eq t) => Eq (Tensor t) where
+  (==) = equal
 
 -- | Return True if two tensors have the same shape and elements.
 equal :: (HasDtype t, Eq t) => Tensor t -> Tensor t -> Bool

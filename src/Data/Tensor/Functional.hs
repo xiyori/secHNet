@@ -1,6 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.Tensor.Functional where
@@ -12,7 +11,7 @@ import qualified Data.Vector.Storable.Mutable as VM
 import Data.List (foldl')
 import System.Random
 import Data.Random.Normal
-import Data.Tensor.Index
+import Data.Tensor.PlainIndex
 import Data.Tensor.Size
 import Data.Tensor.ListUtils
 import Data.Tensor.Definitions as T
@@ -99,7 +98,7 @@ fromList6 listData =
 -- | Generate a tensor from a generator function.
 --
 --   Signature: @shape -> generator -> tensor@
-tensor :: HasDtype t => Index -> (Int -> t) -> Tensor t
+tensor :: HasDtype t => Shape -> (Int -> t) -> Tensor t
 tensor shape builder =
   case V.generate (fromIntegral $ totalElems shape) builder of {dat ->
     Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
@@ -108,23 +107,32 @@ tensor shape builder =
 -- | Return a new tensor filled with @fillValue@.
 --
 --   Signature: @shape -> fillValue -> tensor@
-full :: HasDtype t => Index -> t -> Tensor t
+full :: HasDtype t => Shape -> t -> Tensor t
 full shape fillValue =
-  case V.singleton fillValue of {dat ->
-    Tensor shape (V.replicate (V.length shape) 0) 0 dat
-  }
+  if totalElems shape /= 0 then
+    case V.singleton fillValue of {dat ->
+      Tensor shape (V.replicate (V.length shape) 0) 0 dat
+    }
+  else
+    case V.empty of {dat ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+    }
 
 -- | Return a new tensor filled with zeros.
 --
 --   Signature: @shape -> tensor@
-zeros :: (HasDtype t, Num t) => Index -> Tensor t
+zeros :: (HasDtype t, Num t) => Shape -> Tensor t
 zeros shape = full shape 0
 
 -- | Return a new tensor filled with ones.
 --
 --   Signature: @shape -> tensor@
-ones :: (HasDtype t, Num t) => Index -> Tensor t
+ones :: (HasDtype t, Num t) => Shape -> Tensor t
 ones shape = full shape 1
+
+-- | Return a new empty tensor of shape [0].
+empty :: HasDtype t => Tensor t
+empty = tensor (V.singleton 0) undefined
 
 -- | Return a new tensor of shape [] with a single value.
 scalar :: HasDtype t => t -> Tensor t
@@ -139,7 +147,7 @@ single = full $ V.singleton 1
 --
 --   Signature: @shape -> (low, high) -> gen -> (tensor, gen)@
 randRange :: (HasDtype t, UniformRange t, RandomGen g) =>
-  Index -> (t, t) -> g -> (Tensor t, g)
+  Shape -> (t, t) -> g -> (Tensor t, g)
 randRange shape (low, high) gen =
   case V.unfoldrExactN (fromIntegral $ totalElems shape)
   (uniformR (low, high)) gen of {dat ->
@@ -152,7 +160,7 @@ randRange shape (low, high) gen =
 --
 --   Signature: @shape -> (low, high) -> tensor@
 randRangeM :: (HasDtype t, UniformRange t, MonadIO m) =>
-  Index -> (t, t) -> m (Tensor t)
+  Shape -> (t, t) -> m (Tensor t)
 randRangeM shape (low, high) = do
   dat <- V.replicateM (fromIntegral $ totalElems shape) (
     getStdGen >>= (
@@ -169,7 +177,7 @@ randRangeM shape (low, high) = do
 --
 --   Signature: @shape -> gen -> (tensor, gen)@
 rand :: (HasDtype t, UniformRange t, Num t, RandomGen g) =>
-  Index -> g -> (Tensor t, g)
+  Shape -> g -> (Tensor t, g)
 rand shape = randRange shape (0, 1)
 
 -- | Return a new tensor filled with random values from
@@ -177,7 +185,7 @@ rand shape = randRange shape (0, 1)
 --
 --   Signature: @shape -> tensor@
 randM :: (HasDtype t, UniformRange t, Num t, MonadIO m) =>
-  Index -> m (Tensor t)
+  Shape -> m (Tensor t)
 randM shape = randRangeM shape (0, 1)
 
 -- | Return a new tensor filled with random values from
@@ -185,7 +193,7 @@ randM shape = randRangeM shape (0, 1)
 --
 --   Signature: @shape -> gen -> (tensor, gen)@
 randn :: (HasDtype t, Random t, Floating t, RandomGen g) =>
-  Index -> g -> (Tensor t, g)
+  Shape -> g -> (Tensor t, g)
 randn shape gen =
   case V.unfoldrExactN (fromIntegral $ totalElems shape)
   normal gen of {dat ->
@@ -198,7 +206,7 @@ randn shape gen =
 --
 --   Signature: @shape -> tensor@
 randnM :: (HasDtype t, Random t, Floating t, MonadIO m) =>
-  Index -> m (Tensor t)
+  Shape -> m (Tensor t)
 randnM shape = do
   dat <- V.replicateM (fromIntegral $ totalElems shape) (
     getStdGen >>= (
@@ -431,7 +439,7 @@ elementwise f x1 x2 =
 --
 --   This function is not safe to use,
 --   consider using @(!)@ operator instead.
-unsafeGetElem :: HasDtype t => Tensor t -> Index -> t
+unsafeGetElem :: HasDtype t => Tensor t -> Shape -> t
 unsafeGetElem x@(Tensor shape stride offset dat) index =
   case tensorDtype x of {dtype ->
   case V.unsafeCast dat of {dataCChar ->
@@ -463,53 +471,6 @@ unsafeGetElem x@(Tensor shape stride offset dat) index =
       ++ " for shape "
       ++ show shape
   }
-
--- | Get slice of a tensor.
-(!:) :: (HasDtype t) => Tensor t -> Slices -> Tensor t
-(!:) x@(Tensor shape stride offset dat) slices =
-  case parseSlices shape slices of {(dimsToInsert, slices) ->
-    insertDims (Tensor (V.fromList $ Prelude.map (
-      \ (start :. end :| step) -> fromIntegral $ (end - start) `Prelude.div` step
-    ) $ filter (
-      \case
-        I _ -> False
-        _   -> True
-    ) slices)
-    (V.fromList $ Prelude.map (
-      \ (_ :. _ :| step, stride) ->
-        stride * step
-    ) $ filter (
-      \ (slice, stride) ->
-        case slice of
-          I _ -> False
-          _   -> True
-    ) $ zip slices $ V.toList stride)
-    ((+) offset $ Prelude.sum $ zipWith (
-      \ slice stride ->
-        case slice of
-          start :. end :| step ->
-            fromIntegral $ start * stride
-          I i ->
-            fromIntegral $ i * stride
-    ) slices $ V.toList stride) dat) dimsToInsert
-  }
-
--- validateTensorIndex :: TensorIndex -> Bool
--- validateTensorIndex = allEqual . Prelude.map shape
-
--- (!.) :: (HasDtype t) => Tensor t -> TensorIndex -> Tensor t
--- (!.) x tensorIndex
---   | validateTensorIndex tensorIndex =
---     tensor (shape $ head tensorIndex) (
---       \ index ->
---         x !? fromList (Prelude.map (!? index) tensorIndex)
---     )
---   | otherwise =
---     error
---     $ "incorrect index "
---     ++ show tensorIndex
---     ++ " for shape "
---     ++ show (shape x)
 
 -- | Return the value of a tensor with one element.
 item :: (HasDtype t) => Tensor t -> t
@@ -691,7 +652,7 @@ flatten x =
 -- | Give a new shape to a tensor without changing its data.
 --
 --   Signature: @tensor -> newShape -> tensor@
-view :: (HasDtype t) => Tensor t -> Index -> Tensor t
+view :: (HasDtype t) => Tensor t -> Shape -> Tensor t
 view x@(Tensor shape stride offset dat) newShape
   | totalElems shape == totalElems newShape =
     case sizeOfElem dat of {elemSize ->
@@ -874,8 +835,6 @@ foldr' f accum x =
 {-# INLINE unsafeElementwise #-}
 
 {-# INLINE unsafeGetElem #-}
-{-# INLINE (!:) #-}
--- {-# INLINE advancedIndex #-}
 
 {-# INLINE copy #-}
 {-# INLINE min #-}

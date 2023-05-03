@@ -2,15 +2,15 @@ module Data.Tensor.ListUtils where
 
 import Data.Vector.Storable (Storable, Vector, (!), (//))
 import qualified Data.Vector.Storable as V
-import Data.Tensor.Index
+import Data.Tensor.PlainIndex
 import Data.Tensor.Definitions
 
 -- | Determine tensor shape from list.
-parseShape1 :: [t] -> Index
+parseShape1 :: [t] -> Shape
 parseShape1 listData = V.singleton $ fromIntegral $ length listData
 
 -- | Determine tensor shape from list of lists.
-parseShape2 :: [[t]] -> Index
+parseShape2 :: [[t]] -> Shape
 parseShape2 listData =
   case map length listData of {lengths0 ->
     if allEqual lengths0 then
@@ -21,7 +21,7 @@ parseShape2 listData =
   }
 
 -- | Determine tensor shape from list of lists.
-parseShape3 :: [[[t]]] -> Index
+parseShape3 :: [[[t]]] -> Shape
 parseShape3 listData =
   case map length listData of {lengths0 ->
   case concatMap (
@@ -37,7 +37,7 @@ parseShape3 listData =
   }}
 
 -- | Determine tensor shape from list of lists.
-parseShape4 :: [[[[t]]]] -> Index
+parseShape4 :: [[[[t]]]] -> Shape
 parseShape4 listData =
   case map length listData of {lengths0 ->
   case concatMap (
@@ -59,7 +59,7 @@ parseShape4 listData =
   }}}
 
 -- | Determine tensor shape from list of lists.
-parseShape5 :: [[[[[t]]]]] -> Index
+parseShape5 :: [[[[[t]]]]] -> Shape
 parseShape5 listData =
   case map length listData of {lengths0 ->
   case concatMap (
@@ -88,7 +88,7 @@ parseShape5 listData =
   }}}}
 
 -- | Determine tensor shape from list of lists.
-parseShape6 :: [[[[[[t]]]]]] -> Index
+parseShape6 :: [[[[[[t]]]]]] -> Shape
 parseShape6 listData =
   case map length listData of {lengths0 ->
   case concatMap (
