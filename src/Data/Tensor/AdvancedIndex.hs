@@ -111,31 +111,30 @@ instance Integral Indexer where
 -- | Parse @None@ in indexers.
 --
 --   Signature: @nDims -> indexers -> (dimsToInsert, parsedIndexers)@
-parseNone :: Int -> Indexers -> ([Int], Indexers)
-parseNone nDims indexers =
-  case filter (
+parseNoneIndexer :: Int -> Indexers -> ([Int], Indexers)
+parseNoneIndexer nDims indexers =
+  case map (
     \case
-      I _ -> False
-      _   -> True
-  ) indexers of {intervalsOnly ->
-  case elemIndices Ell indexers of
-    [] ->
-      (elemIndices None intervalsOnly,
-       filter (/= None) indexers)
-    [dim] ->
-      (elemIndices None (take dim intervalsOnly)
-       ++ map (nDims - length intervalsOnly + dim +)
-          (elemIndices None (drop dim intervalsOnly)),
-       filter (/= None) indexers)
-    _ ->
-      error "indexers can only have a single ellipsis \'Ell\'"
+      None    -> A
+      indexer -> indexer
+  ) indexers of {parsedIndexers ->
+    case elemIndices Ell indexers of
+      [] ->
+        (elemIndices None indexers, parsedIndexers)
+      [dim] ->
+        (elemIndices None (take dim indexers)
+         ++ map (nDims - length indexers + dim +)
+            (elemIndices None (drop dim indexers)),
+        parsedIndexers)
+      _ ->
+        error "indexers can only have a single ellipsis \'Ell\'"
   }
 
 -- | Parse @Ell@ and pad indexers to @nDims@ length.
 --
 --   Signature: @nDims -> indexers -> parsedIndexers@
-parseEllipses :: Int -> Indexers -> Indexers
-parseEllipses nDims indexers =
+parseEllIndexer :: Int -> Indexers -> Indexers
+parseEllIndexer nDims indexers =
   case elemIndices Ell indexers of
     [] ->
       indexers ++ replicate (nDims - length indexers) A
@@ -146,10 +145,13 @@ parseEllipses nDims indexers =
     _ ->
       error "indexers can only have a single ellipsis \'Ell\'"
 
+parseTensorIndexer :: Indexers -> (b, Indexers)
+parseTensorIndexer = error ""
+
 -- | Parse negative indexer values.
 --
 --   Signature: @i -> dim -> indexer -> step -> normIndexer@
-normalizeIndexer :: Int -> CLLong -> Indexer -> CLLong -> Indexer
+normalizeIndexer :: Int -> Int -> Indexer -> Int -> Indexer
 normalizeIndexer axis dim (I i) step =
   case normalizeItem dim i of {normI ->
     if 0 <= normI && normI < dim then
@@ -206,13 +208,10 @@ normalizeIndexer axis dim indexer step
 -- | Parse indexers and validate their correctness.
 --
 --   Signature: @shape -> indexers -> parsedIndexers@
-parseIndexers :: Shape -> Indexers -> ([Int], Indexers)
+parseIndexers :: Shape -> Indexers -> Indexers
 parseIndexers shape indexers =
   case V.length shape of {nDims ->
-  case parseNone nDims indexers of {(dimsToInsert, indexers) ->
-  case parseEllipses nDims indexers of {indexers ->
     if length indexers <= nDims then
-      (dimsToInsert,
       zipWith3 (
         \ axis dim indexer ->
           case indexer of
@@ -222,8 +221,8 @@ parseIndexers shape indexers =
               normalizeIndexer axis (fromIntegral dim) indexer step
             _ ->
               normalizeIndexer axis (fromIntegral dim) indexer 1
-      ) [0 .. V.length shape - 1]
-      (V.toList shape) indexers)
+      ) [0 .. nDims - 1]
+      (V.toList shape) indexers
     else
       error
       $ "too many indices for tensor: tensor is "
@@ -231,36 +230,18 @@ parseIndexers shape indexers =
       ++ "-dimensional, but "
       ++ show (length indexers)
       ++ " were indexed"
-  }}}
-
--- | Validate tensor index correctness.
--- validateTensorIndex :: TensorIndex -> Bool
--- validateTensorIndex = allEqual . Prelude.map shape
-
--- -- | Integer tensor indexing (advanced indexing).
--- --
--- --   Negative values in index tensors are supported.
--- (!.) :: (HasDtype t) => Tensor t -> TensorIndex -> Tensor t
--- (!.) x tensorIndex
---   | validateTensorIndex tensorIndex =
---     tensor (shape $ head tensorIndex) (
---       \ index ->
---         x ! []
---     )
---   | otherwise =
---     error
---     $ "incorrect tensor index "
---     ++ show (Prelude.map shape tensorIndex)
---     ++ " for shape "
---     ++ show (shape x)
+  }
 
 -- | Perform slicing and advanced indexing.
 --
 --   Negative values in indexer bounds and index tensors are supported.
 (!:) :: (HasDtype t) => Tensor t -> Indexers -> Tensor t
-(!:) x@(Tensor shape stride offset dat) indexers =
-  case parseIndexers shape indexers of {(dimsToInsert, indexers) ->
-    insertDims (Tensor (V.fromList $ Prelude.map (
+(!:) x@(Tensor shape _ _ _) indexers =
+  case parseNoneIndexer (V.length shape) indexers of {(dimsToInsert, indexers) ->
+  case insertDims x dimsToInsert of {(Tensor shape stride offset dat) ->
+  case parseEllIndexer (V.length shape) indexers of {indexers ->
+  case parseIndexers shape indexers of {indexers ->
+    Tensor (V.fromList $ Prelude.map (
       \ (I start :. end :. step) -> fromIntegral $ (end - start) `Prelude.div` step
     ) $ filter (
       \case
@@ -269,7 +250,7 @@ parseIndexers shape indexers =
     ) indexers)
     (V.fromList $ Prelude.map (
       \ (_ :. _ :. step, stride) ->
-        stride * step
+        stride * fromIntegral step
     ) $ filter (
       \ (indexer, stride) ->
         case indexer of
@@ -280,14 +261,15 @@ parseIndexers shape indexers =
       \ indexer stride ->
         case indexer of
           I start :. end :. step ->
-            fromIntegral $ start * stride
+            fromIntegral $ fromIntegral start * stride
           I i ->
-            fromIntegral $ i * stride
-    ) indexers $ V.toList stride) dat) dimsToInsert
-  }
+            fromIntegral $ fromIntegral i * stride
+    ) indexers $ V.toList stride) dat
+  }}}}
 
-{-# INLINE parseNone #-}
-{-# INLINE parseEllipses #-}
+{-# INLINE parseNoneIndexer #-}
+{-# INLINE parseEllIndexer #-}
+{-# INLINE parseTensorIndexer #-}
 {-# INLINE normalizeIndexer #-}
 {-# INLINE parseIndexers #-}
 {-# INLINE (!:) #-}

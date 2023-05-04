@@ -99,7 +99,7 @@ infix 4 `allClose`
       Tensor shape (computeStride (fromIntegral $ sizeOf (undefined :: CBool)) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_equal(
@@ -134,7 +134,7 @@ infix 4 ==
       Tensor shape (computeStride (fromIntegral $ sizeOf (undefined :: CBool)) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_not_equal(
@@ -169,7 +169,7 @@ infix 4 /=
       Tensor shape (computeStride (fromIntegral $ sizeOf (undefined :: CBool)) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_greater(
@@ -204,7 +204,7 @@ infix 4 >
       Tensor shape (computeStride (fromIntegral $ sizeOf (undefined :: CBool)) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_less(
@@ -239,7 +239,7 @@ infix 4 <
       Tensor shape (computeStride (fromIntegral $ sizeOf (undefined :: CBool)) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_geq(
@@ -274,7 +274,7 @@ infix 4 >=
       Tensor shape (computeStride (fromIntegral $ sizeOf (undefined :: CBool)) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_leq(
@@ -304,7 +304,7 @@ not x@(Tensor shape stride offset dat) =
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_not(

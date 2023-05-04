@@ -25,35 +25,38 @@ class (HasDtype t, Num t) => HasArange t where
 data (HasDtype t) =>
   Tensor t = Tensor {
     -- | Tensor shape.
-    shape :: !Shape,
+    tensorShape :: !Shape,
     -- | Data stride in bytes, analogous to NumPy array stride.
-    tensorStride :: !Index,
+    tensorStride :: !Stride,
     -- | Data offset in bytes.
     tensorOffset :: !CSize,
     -- | Internal data representation.
     tensorData :: !(Vector t)
   }
 
--- | Tensor shape @Vector CSize@.
+-- | Tensor internal shape.
 type Shape = Vector CSize
 
--- | Tensor index and stride @Vector CLLong@.
-type Index = Vector CLLong
+-- | Tensor internal stride.
+type Stride = Vector CLLong
+
+-- | Tensor index.
+type Index = [Int]
 
 -- | Indexer data type.
 data Indexer
   -- | Single index @I index@.
-  = I CLLong
+  = I Int
   -- | Full slice, analogous to NumPy @:@.
   | A
   -- | Slice from start, analogous to NumPy @start:@.
-  | S CLLong
+  | S Int
   -- | Slice till end, analogous to NumPy @:end@.
-  | E CLLong
+  | E Int
   | Indexer -- | Slice @I start :. end@, @S start :. step@,
           --   @E end :. step@ or @start :. end :. step@,
           --   analogous to NumPy @start:end:step@.
-          :. CLLong
+          :. Int
   -- | Tensor index (advanced indexing).
   | T (Tensor CLLong)
   -- | Insert new dim, analogous to NumPy @None@.

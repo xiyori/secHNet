@@ -71,50 +71,50 @@ instance HasDtype CDouble where
   tensorDtype _ = 11
   showDtype _ = "float64"
 
-_rangeF :: (HasDtype t, RealFrac t) => t -> t -> t -> Tensor t
-_rangeF low high step =
-  tensor (V.singleton $ ceiling $ Prelude.max 0 $ (high - low) / step) (
+rangeF_ :: (HasDtype t, RealFrac t) => t -> t -> t -> Tensor t
+rangeF_ low high step =
+  tensor_ (V.singleton $ ceiling $ Prelude.max 0 $ (high - low) / step) (
     \ fIndex -> low + step * fromIntegral fIndex
   )
 
-_rangeI :: (HasDtype t, Integral t) => t -> t -> t -> Tensor t
-_rangeI low high step =
-  tensor (V.singleton $ fromIntegral $ Prelude.max 0 $ -((low - high) `div` step)) (
+rangeI_ :: (HasDtype t, Integral t) => t -> t -> t -> Tensor t
+rangeI_ low high step =
+  tensor_ (V.singleton $ fromIntegral $ Prelude.max 0 $ -((low - high) `div` step)) (
     \ fIndex -> low + step * fromIntegral fIndex
   )
 
-{-# INLINE _rangeF #-}
-{-# INLINE _rangeI #-}
+{-# INLINE rangeF_ #-}
+{-# INLINE rangeI_ #-}
 
 instance HasArange CChar where
-  arange = _rangeI
+  arange = rangeI_
 
 instance HasArange CUChar where
-  arange = _rangeI
+  arange = rangeI_
 
 instance HasArange CShort where
-  arange = _rangeI
+  arange = rangeI_
 
 instance HasArange CUShort where
-  arange = _rangeI
+  arange = rangeI_
 
 instance HasArange CInt where
-  arange = _rangeI
+  arange = rangeI_
 
 instance HasArange CUInt where
-  arange = _rangeI
+  arange = rangeI_
 
 instance HasArange CLLong where
-  arange = _rangeI
+  arange = rangeI_
 
 instance HasArange CULLong where
-  arange = _rangeI
+  arange = rangeI_
 
 instance HasArange CFloat where
-  arange = _rangeF
+  arange = rangeF_
 
 instance HasArange CDouble where
-  arange = _rangeF
+  arange = rangeF_
 
 instance (HasDtype t, Num t) => Num (Tensor t) where
   (+) x1 x2 =
@@ -128,7 +128,7 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat1) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_add(
@@ -159,7 +159,7 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat1) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_sub(
@@ -190,7 +190,7 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat1) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_mult(
@@ -216,7 +216,7 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_neg(
@@ -239,7 +239,7 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_abs(
@@ -262,7 +262,7 @@ instance (HasDtype t, Num t) => Num (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_sign(
@@ -299,7 +299,7 @@ instance (HasDtype t, Fractional t) => Fractional (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat1) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_div(
@@ -331,7 +331,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_exp(
@@ -354,7 +354,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_log(
@@ -377,7 +377,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_sin(
@@ -400,7 +400,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_cos(
@@ -423,7 +423,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_asin(
@@ -446,7 +446,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_acos(
@@ -469,7 +469,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_atan(
@@ -492,7 +492,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_sinh(
@@ -515,7 +515,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_cosh(
@@ -538,7 +538,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_asinh(
@@ -561,7 +561,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_acosh(
@@ -584,7 +584,7 @@ instance (HasDtype t, Floating t) => Floating (Tensor t) where
       Tensor shape (computeStride (sizeOfElem dat) shape) 0
       $ unsafePerformIO
       $ do
-        mutableData <- VM.new $ fromIntegral $ totalElems shape
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
         case VM.unsafeCast mutableData of {mutableDataCChar ->
           [CU.exp| void {
             tensor_atanh(
@@ -628,14 +628,14 @@ instance (HasDtype t, Show t) => Show (Tensor t) where
     --   ++ showDtype x
     --   ++ ")"
     -- Print info about empty tensor
-    | totalElems shape == 0 =
+    | totalElems_ shape == 0 =
       "tensor([], shape="
       ++ show shape
       ++ ", dtype="
       ++ showDtype x
       ++ ")"
     -- Print all elements
-    | totalElems shape <= maxElements =
+    | totalElems_ shape <= maxElements =
       "tensor("
       ++ goAll (maxLengthAll []) "       " []
       ++ ")"

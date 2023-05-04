@@ -2,16 +2,47 @@ module Data.Tensor.PlainIndex where
 
 import Data.Vector.Storable (Storable, Vector, (!), (//))
 import qualified Data.Vector.Storable as V
+import Data.List
 import Data.Tensor.Definitions
 
 import Foreign
 import Foreign.C.Types
 
 
+-- | Convert an internal shape to a list representation.
+--
+--   Signature: @shape -> listShape@
+shapeToIndex :: Shape -> Index
+shapeToIndex = V.toList . V.map fromIntegral
+
+-- | Convert a list representation to an internal shape.
+--
+--   Signature: @listShape -> shape@
+indexToShape :: Index -> Shape
+indexToShape listShape
+  | all (>= 0) listShape =
+    V.map fromIntegral $ V.fromList listShape
+  | otherwise =
+    error
+    $ "invalid tensor shape "
+    ++ show listShape
+
+-- | Total number of elements in a tensor with shape @shape@.
+--
+--   Signature: @shape -> numel@
+totalElems :: Index -> Int
+totalElems = foldl' (*) 1
+
+-- | Total number of elements in a tensor with shape @shape@.
+--
+--   Signature: @shape -> numel@
+totalElems_ :: Shape -> CSize
+totalElems_ = V.foldl' (*) 1
+
 -- | Coefficients for index flattening.
 --
 --   Signature: @sizeOfElem -> shape -> stride@
-computeStride :: CSize -> Shape -> Index
+computeStride :: CSize -> Shape -> Stride
 computeStride sizeOfElem shape =
   case V.length shape of {len ->
     V.constructrN len (
@@ -21,6 +52,16 @@ computeStride sizeOfElem shape =
         else fromIntegral (shape ! (len - V.length accum)) * V.head accum
     )
   }
+
+-- | Validate index correctness.
+--
+--   Signature: @shape -> index -> isValid@
+validateIndex :: Shape -> Vector Int -> Bool
+validateIndex shape index
+  | V.length shape /= V.length index                   = False
+  | V.any (< 0) index                                  = False
+  | V.or $ V.zipWith ((>=) . fromIntegral) index shape = False
+  | otherwise                                          = True
 
 -- | Parse negative index value.
 --
@@ -36,24 +77,8 @@ normalizeItem dim i =
 -- | Parse negative index values.
 --
 --   Signature: @shape -> index -> normIndex@
-normalizeIndex :: Shape -> Index -> Index
+normalizeIndex :: Shape -> Vector Int -> Vector Int
 normalizeIndex = V.zipWith normalizeItem
-
--- | Total number of elements in a tensor with shape @shape@.
---
---   Signature: @shape -> numel@
-totalElems :: Shape -> CSize
-totalElems = V.foldl' (*) 1
-
--- | Validate index correctness.
---
---   Signature: @shape -> index -> isValid@
-validateIndex :: Shape -> Index -> Bool
-validateIndex shape index
-  | V.length shape /= V.length index  = False
-  | V.any (< 0) index                 = False
-  | V.or $ V.zipWith ((>=) . fromIntegral) index shape = False
-  | otherwise                         = True
 
 -- | Determine if two shapes can be broadcasted.
 --
@@ -71,7 +96,7 @@ verifyBroadcastable shape1 shape2 =
 --   Signature: @shape1 -> shape2 -> stride1 -> stride2 ->
 --                (shape1, shape2, stride1, stride2)@
 broadcastShapesStrides ::
-  Shape -> Shape -> Index -> Index -> (Shape, Shape, Index, Index)
+  Shape -> Shape -> Stride -> Stride -> (Shape, Shape, Stride, Stride)
 broadcastShapesStrides shape1 shape2 stride1 stride2 =
   case V.length shape1 of {nDims1 ->
   case V.length shape2 of {nDims2 ->
@@ -93,6 +118,39 @@ broadcastedShape =
       else dim1
   )
 
+-- | Parse -1 in new shape in @view@.
+--
+--   Signature: @shape -> newShape -> parsedShape@
+parseNewShape :: Shape -> Index -> Shape
+parseNewShape shape newShape =
+  case elemIndices (-1) newShape of
+    [] -> indexToShape newShape
+    [dim] ->
+      V.fromList
+      $ map (
+        \ dim ->
+          if dim == -1 then
+            case foldl' (*) (-1) newShape of {newTotalElems ->
+              if newTotalElems > 0 then
+                totalElems_ shape `div` fromIntegral newTotalElems
+              else
+                error
+                $ "cannot reshape tensor of shape "
+                ++ show shape
+                ++ " into shape "
+                ++ show newShape
+            }
+          else if dim < 0 then
+            error
+            $ "invalid tensor shape "
+            ++ show newShape
+          else fromIntegral dim
+      ) newShape
+    _ ->
+      error
+      $ "can only specify one unknown dimension "
+      ++ show newShape
+
 -- | Determine if all elements in a list are equal.
 allEqual :: Eq a => [a] -> Bool
 allEqual xs = all (== head xs) $ tail xs
@@ -104,13 +162,16 @@ swapElementsAt :: (Storable t) => Vector t -> Int -> Int -> Vector t
 swapElementsAt index dim1 dim2 =
   index // [(dim1, index ! dim2), (dim2, index ! dim1)]
 
+{-# INLINE shapeToIndex #-}
+{-# INLINE totalElems #-}
+{-# INLINE totalElems_ #-}
 {-# INLINE computeStride #-}
+{-# INLINE validateIndex #-}
 {-# INLINE normalizeItem #-}
 {-# INLINE normalizeIndex #-}
-{-# INLINE totalElems #-}
-{-# INLINE validateIndex #-}
 {-# INLINE verifyBroadcastable #-}
 {-# INLINE broadcastShapesStrides #-}
 {-# INLINE broadcastedShape #-}
+{-# INLINE parseNewShape #-}
 {-# INLINE allEqual #-}
 {-# INLINE swapElementsAt #-}

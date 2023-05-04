@@ -4,10 +4,8 @@
 module Instances where
 
 import Control.Monad
-import Data.Vector.Storable (Storable, Vector, (//))
-import qualified Data.Vector.Storable as V
 import System.Random
-import Data.Tensor as T (Tensor, HasDtype, full, randRange, map, (!:), Indexers, Indexer(I, (:.)), Shape)
+import Data.Tensor as T (Tensor, HasDtype, full, randRange, map, (!:), Indexers, Indexer(I, (:.)), Index)
 import Test.QuickCheck
 
 import Foreign.C.Types
@@ -19,15 +17,14 @@ instance (HasDtype t, UniformRange t, Num t, Eq t) => Arbitrary (Tensor t) where
     shape <- arbitrary
     arbitraryWithShape shape
 
-instance Arbitrary Shape where
-  arbitrary :: Gen Shape
+instance {-# OVERLAPPING #-} Arbitrary Index where
+  arbitrary :: Gen Index
   arbitrary = do
     nDims <- chooseInt (0, 4)
-    list <- vectorOf nDims $ chooseEnum (0, 10)
-    return $ V.fromList list
+    vectorOf nDims $ chooseEnum (0, 10)
 
 arbitraryWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>
-  Shape -> Gen (Tensor t)
+  Index -> Gen (Tensor t)
 arbitraryWithShape shape = do
   isContiguous <- chooseAny
   if isContiguous then
@@ -40,7 +37,7 @@ arbitraryWithShape shape = do
         return $ full shape (-128)
       else return $ full shape $ fromIntegral value
     else do
-      expandedShape <- V.mapM (
+      expandedShape <- mapM (
         \ dim -> do
           addDim <- chooseEnum (0, 10)
           return $ dim + addDim
@@ -53,8 +50,8 @@ arbitraryWithShape shape = do
 --   Vector CInt -> Gen (Tensor t)
 -- arbitraryWithShape = arbitraryContiguousWithShape
 
-arbitrarySlices :: Shape -> Shape -> Gen Indexers
-arbitrarySlices shape expandedShape =
+arbitrarySlices :: Index -> Index -> Gen Indexers
+arbitrarySlices =
   zipWithM (
     \ dim expDim -> do
       start <- chooseEnum (0, expDim - dim)
@@ -64,11 +61,10 @@ arbitrarySlices shape expandedShape =
           I (-(start + 1)) :. -(start + dim + 1) :. -1
         else
           I start :. start + dim
-  ) (V.toList $ V.map fromIntegral shape)
-    (V.toList $ V.map fromIntegral expandedShape)
+  )
 
 arbitraryContiguousWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>
-  Shape -> Gen (Tensor t)
+  Index -> Gen (Tensor t)
 arbitraryContiguousWithShape shape = do
   seed <- chooseAny
   case mkStdGen seed of {gen ->
@@ -84,7 +80,7 @@ arbitraryContiguousWithShape shape = do
   }
 
 arbitraryPairWithShape :: (HasDtype t, UniformRange t, Num t, Eq t) =>
-  Shape -> Gen (Tensor t, Tensor t)
+  Index -> Gen (Tensor t, Tensor t)
 arbitraryPairWithShape shape = do
   x1 <- arbitraryWithShape shape
   x2 <- arbitraryWithShape shape
@@ -98,19 +94,19 @@ arbitraryBroadcastablePair = do
   x2 <- arbitraryWithShape shape2
   return (x1, x2)
 
-arbitraryBroadcastableShapes :: Gen (Shape, Shape)
+arbitraryBroadcastableShapes :: Gen (Index, Index)
 arbitraryBroadcastableShapes = do
   shape <- arbitrary
   seed <- chooseAny
   case mkStdGen seed of {gen ->
-    if V.length shape == 0 then
+    if null shape then
       return (shape, shape)
     else
-      case randomR (0, V.length shape - 1) gen of {(dim1, gen) ->
-      case randomR (0, V.length shape - 1) gen of {(dim2, gen) ->
-      case randomR (0, V.length shape) gen of {(len1, gen) ->
-      case randomR (0, V.length shape) gen of {(len2, gen) ->
-        return (V.drop len1 $ shape // [(dim1, 1)],
-                V.drop len2 $ shape // [(dim2, 1)])
+      case randomR (0, length shape - 1) gen of {(dim1, gen) ->
+      case randomR (0, length shape - 1) gen of {(dim2, gen) ->
+      case randomR (0, length shape) gen of {(len1, gen) ->
+      case randomR (0, length shape) gen of {(len2, gen) ->
+        return (drop len1 $ take dim1 shape ++ [1] ++ drop (dim1 + 1) shape,
+                drop len2 $ take dim2 shape ++ [1] ++ drop (dim2 + 1) shape)
       }}}}
   }
