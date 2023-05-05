@@ -37,3 +37,35 @@
 FUNC_INT_FLOAT(FOLD, min, MIN)
 FUNC_INT_FLOAT(FOLD, max, MAX)
 FUNC_INT_FLOAT(FOLD, sum, SUM)
+
+void
+sum_along_dims(
+    int start_sum_dim,
+    int n_dims,
+    size_t *shape,
+    long long *stride,
+    size_t offset,
+    dtype_t dtype,
+    size_t elem_size,
+    char *dat_from,
+    char * __restrict dat_to)
+{
+    int sum_n_dims = n_dims - start_sum_dim;
+    size_t *sum_shape = shape + start_sum_dim;
+    long long *sum_stride = stride + start_sum_dim;
+    INIT_INDEX(start_sum_dim, dat_from)
+    for (size_t i = 0; i < numel; ++i) {
+        tensor_sum(
+            sum_n_dims,
+            sum_shape,
+            sum_stride,
+            0,
+            dtype,
+            dat_from,
+            dat_to
+        );
+        dat_to += elem_size;
+        ADVANCE_INDEX(start_sum_dim, dat_from)
+    }
+    DESTROY_INDEX()
+}

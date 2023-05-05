@@ -44,15 +44,48 @@ totalElems_ = V.foldl' (*) 1
 --
 --   Signature: @sizeOfElem -> shape -> stride@
 computeStride :: CSize -> Shape -> Stride
-computeStride sizeOfElem shape =
-  case V.length shape of {len ->
-    V.constructrN len (
-      \ accum ->
-        if V.null accum then
-          fromIntegral sizeOfElem
-        else fromIntegral (shape ! (len - V.length accum)) * V.head accum
-    )
-  }
+computeStride sizeOfElem =
+  V.drop 1 . V.scanr' (
+    \ dim accum -> accum * fromIntegral dim
+  ) (fromIntegral sizeOfElem)
+
+-- | Flatten tensor index to integer index.
+--
+--   Signature: @shape -> index -> fIndex@
+flattenIndex :: Index -> Index -> Int
+flattenIndex shape = flattenIndex_ $ flattenCoeffs_ shape
+
+-- | Flatten tensor index to integer index.
+--
+--   Signature: @flattenCoeffs -> index -> fIndex@
+flattenIndex_ :: Index -> Index -> Int
+flattenIndex_ flatCoeffs index = sum $ zipWith (*) flatCoeffs index
+
+-- | Convert flattened integer index to tensor index.
+--
+--   Signature: @shape -> fIndex -> index@
+unravelIndex :: Index -> Int -> Index
+unravelIndex shape =
+  unravelIndex_ (unravelCoeffs_ shape) (flattenCoeffs_ shape)
+
+-- | Convert flattened integer index to tensor index.
+--
+--   Signature: @unravelCoeffs -> flattenCoeffs -> fIndex -> index@
+unravelIndex_ :: Index -> Index -> Int -> Index
+unravelIndex_ unravelCoeffs flattenCoeffs fIndex =
+  zipWith div (map (mod fIndex) unravelCoeffs) flattenCoeffs
+
+-- | Coefficients for index flattening.
+--
+--   Signature: @shape -> flattenCoeffs@
+flattenCoeffs_ :: Index -> Index
+flattenCoeffs_ = drop 1 . scanr (*) 1
+
+-- | Coefficients for index unraveling.
+--
+--   Signature: @shape -> unravelCoeffs@
+unravelCoeffs_ :: Index -> Index
+unravelCoeffs_ = scanr1 (*)
 
 -- | Validate index correctness.
 --
@@ -199,17 +232,27 @@ normalizeNewDim nDims dim =
     fromIntegral nDims + 1 + dim
   else dim
 
--- | Swap index dimensions.
+-- | Swap index dims.
 --
 --   Signature: @index -> dim1 -> dim2 -> swappedIndex@
 swapElementsAt :: (Storable t) => Vector t -> Int -> Int -> Vector t
 swapElementsAt index dim1 dim2 =
   index // [(dim1, index ! dim2), (dim2, index ! dim1)]
 
+-- | Sort index according new dim order.
+--
+--   Signature: @index -> dims -> sortedIndex@
+sortDims :: Storable t => Vector t -> [Int] -> Vector t
+sortDims vec = V.map (vec V.!) . V.fromList
+
 {-# INLINE shapeToIndex #-}
 {-# INLINE totalElems #-}
 {-# INLINE totalElems_ #-}
 {-# INLINE computeStride #-}
+{-# INLINE flattenIndex_ #-}
+{-# INLINE unravelIndex_ #-}
+{-# INLINE flattenCoeffs_ #-}
+{-# INLINE unravelCoeffs_ #-}
 {-# INLINE normalizeItem #-}
 {-# INLINE parseIndex #-}
 {-# INLINE allEqual #-}
@@ -218,3 +261,4 @@ swapElementsAt index dim1 dim2 =
 {-# INLINE parseNewShape #-}
 {-# INLINE normalizeNewDim #-}
 {-# INLINE swapElementsAt #-}
+{-# INLINE sortDims #-}

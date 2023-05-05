@@ -7,7 +7,7 @@
 - [x] astype
 - [x] integer division, mod
 - [x] advancedIndex
-- [ ] sumAlongDim
+- [x] sumAlongDim
 - [ ] matmul
 - [ ] conv
 - [ ] concat, stack

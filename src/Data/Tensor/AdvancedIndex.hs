@@ -367,12 +367,6 @@ slice x@(Tensor shape stride offset dat) indexers =
                 case VM.unsafeCast mutableData of {mutableDataCChar ->
                   [CU.exp| void {
                     tensor_index(
-                      $vec-len:shape,
-                      $vec-ptr:(size_t *shape),
-                      $vec-ptr:(long long *stride),
-                      $(size_t offset),
-                      $(size_t elemSize),
-                      $vec-ptr:(char *dataCChar),
                       $(int startIndexDim),
                       $(int nIndices),
                       $(int indexNDims),
@@ -380,6 +374,12 @@ slice x@(Tensor shape stride offset dat) indexers =
                       $(long long **indexStridesPtr),
                       $(size_t *indexOffsetsPtr),
                       $(char **indexDatPtr),
+                      $vec-len:shape,
+                      $vec-ptr:(size_t *shape),
+                      $vec-ptr:(long long *stride),
+                      $(size_t offset),
+                      $(size_t elemSize),
+                      $vec-ptr:(char *dataCChar),
                       $vec-ptr:(char *mutableDataCChar)
                     )
                   } |]
@@ -392,7 +392,6 @@ slice x@(Tensor shape stride offset dat) indexers =
       findGap [] = False
       findGap [_] = False
       findGap (dim1 : dim2 : dims) = dim2 - dim1 > 1 || findGap (dim2 : dims)
-      sortDims vec = V.map (vec V.!) . V.fromList
 
 {-# INLINE parseNoneIndexer #-}
 {-# INLINE parseEllIndexer #-}

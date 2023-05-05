@@ -22,6 +22,7 @@ import Data.Tensor (
       fromList4,
       fromList5,
       tensor,
+      tensor_,
       full,
       zeros,
       ones,
@@ -31,6 +32,7 @@ import Data.Tensor (
       onesLike,
       eye,
       broadcast,
+      broadcastN,
       (//),
       (%),
       elementwise,
@@ -41,12 +43,16 @@ import Data.Tensor (
       shape,
       numel,
       mean,
+      sumAlongDims,
+      sumAlongDim,
       copy,
       astype,
       transpose,
       flatten,
       view,
-      insertDim)
+      insertDim,
+      insertDims,
+      swapDims)
 import qualified Data.Tensor as T
 
 import Foreign.C.Types
@@ -62,10 +68,8 @@ prop_fromList3 = (fromList3 [[[], []], [[], []], [[], []]] :: Tensor CFloat) `eq
 prop_tensor0 :: Index -> Bool
 prop_tensor0 shape = tensor shape (const (0 :: CFloat)) `equal` zeros shape
 
-prop_tensor :: Index -> Gen Bool
-prop_tensor shape = do
-  x@(Tensor _ _ _ dat) <- arbitraryContiguousWithShape shape :: Gen (Tensor CFloat)
-  return $ tensor shape (dat V.!) `equal` x
+prop_tensor :: Tensor CFloat -> Bool
+prop_tensor x = tensor (shape x) (x !) `equal` x
 
 prop_empty :: Bool
 prop_empty = (T.empty :: Tensor CFloat) `equal` full [0] undefined
@@ -94,7 +98,7 @@ prop_eye_transpose1_unit = not $ transpose x `equal` x
 prop_arange :: Index -> Bool
 prop_arange shape
   | totalElems shape /= 0 =
-    flatten (tensor shape fromIntegral) `equal`
+    flatten (tensor_ (V.map fromIntegral $ V.fromList shape) fromIntegral) `equal`
     arange (0 :: CFloat) (fromIntegral $ totalElems shape) 1
   | otherwise =
     True
@@ -102,7 +106,7 @@ prop_arange shape
 prop_arange_neg :: Index -> Bool
 prop_arange_neg shape
   | totalElems shape /= 0 =
-    flatten (tensor shape $ negate . fromIntegral) `allClose`
+    flatten (tensor_ (V.map fromIntegral $ V.fromList shape) $ negate . fromIntegral) `allClose`
     arange (0 :: CFloat) (-(fromIntegral $ totalElems shape)) (-1)
   | otherwise =
     True
@@ -122,7 +126,7 @@ prop_arange_empty_neg = (arange 0 1 (-1) :: Tensor CFloat) `equal` T.empty
 prop_arange_int :: Index -> Bool
 prop_arange_int shape
   | totalElems shape /= 0 =
-    flatten (tensor shape fromIntegral) `equal`
+    flatten (tensor_ (V.map fromIntegral $ V.fromList shape) $ fromIntegral) `equal`
     arange (0 :: CLLong) (fromIntegral $ totalElems shape) 1
   | otherwise =
     True
@@ -130,7 +134,7 @@ prop_arange_int shape
 prop_arange_neg_int :: Index -> Bool
 prop_arange_neg_int shape
   | totalElems shape /= 0 =
-    flatten (tensor shape $ negate . fromIntegral) `equal`
+    flatten (tensor_ (V.map fromIntegral $ V.fromList shape) $ negate . fromIntegral) `equal`
     arange (0 :: CLLong) (-(fromIntegral $ totalElems shape)) (-1)
   | otherwise =
     True
@@ -148,7 +152,7 @@ prop_arange_empty_neg_int :: Bool
 prop_arange_empty_neg_int = (arange 0 1 (-1) :: Tensor CLLong) `equal` T.empty
 
 prop_broadcast_scalar :: Tensor CFloat -> Bool
-prop_broadcast_scalar x = shape (snd $ broadcast x (scalar (0 :: CFloat))) == shape x
+prop_broadcast_scalar x = shape (last $ broadcastN [x, scalar 0]) == shape x
 
 prop_broadcast :: Gen Bool
 prop_broadcast = do
@@ -247,6 +251,65 @@ prop_sum_single = T.sum (single 1) == (1 :: CFloat)
 prop_mean_empty :: Index -> Bool
 prop_mean_empty shape = isNaN $ T.mean (ones $ 0 : shape :: Tensor CFloat)
 
+prop_sum_along :: Tensor CFloat -> Bool
+prop_sum_along x =
+  sumAlongDim xI 0 `equal`
+  tensor (tail $ shape xI) (\ index -> T.sum $ xI !: (A : map I index))
+  where
+    xI = insertDim x (-1)
+
+prop_sum_along_ones :: Index -> Bool
+prop_sum_along_ones shape =
+  sumAlongDim (ones shapeI :: Tensor CFloat) 0 `equal`
+  full (tail shapeI) (fromIntegral $ head shapeI)
+  where
+    shapeI = shape ++ [1]
+
+prop_sum_along_distributive :: Index -> Gen Bool
+prop_sum_along_distributive shape = do
+  (x1, x2) <- arbitraryPairWithShape $ shape ++ [1] :: Gen (Tensor CDouble, Tensor CDouble)
+  return $ sumAlongDim x1 0 + sumAlongDim x2 0 `allClose` sumAlongDim (x1 + x2) 0
+
+prop_sum_along_empty :: Index -> Bool
+prop_sum_along_empty shape =
+  (sumAlongDim (zeros shapeI) 0 :: Tensor CFloat) `equal` zeros (tail shapeI)
+  where
+    shapeI = shape ++ [0]
+
+prop_sum_along_single :: Bool
+prop_sum_along_single = sumAlongDim (single 1 :: Tensor CFloat) 0 == 1
+
+prop_sum_along_single_neg :: Bool
+prop_sum_along_single_neg = sumAlongDim (single 1 :: Tensor CFloat) (-1) == 1
+
+prop_sum_along_keep_dims :: Tensor CFloat -> Bool
+prop_sum_along_keep_dims x =
+  unsafePerformIO
+  $ print (sumAlongDims xI [0] True) >> print
+  (tensor (1 : tail (shape xI)) (\ index -> T.sum $ xI !: (A : map I (tail index)))) >> return (
+  sumAlongDims xI [0] True ==
+  tensor (1 : tail (shape xI)) (\ index -> T.sum $ xI !: (A : map I (tail index))))
+  where
+    xI = insertDim x (-1)
+
+prop_sum_along_keep_dims_neg :: Tensor CFloat -> Bool
+prop_sum_along_keep_dims_neg x =
+  sumAlongDims xI [-1] True ==
+  tensor (init (shape xI) ++ [1]) (\ index -> T.sum $ xI !: (map I (init index) ++ [A]))
+  where
+    xI = insertDim x 0
+
+prop_sum_along_all :: Tensor CFloat -> Bool
+prop_sum_along_all x =
+  sumAlongDims x [0 .. dim x - 1] False == scalar (T.sum x)
+
+prop_sum_along_keep_dims_all :: Tensor CFloat -> Bool
+prop_sum_along_keep_dims_all x =
+  unsafePerformIO
+  $ print (sumAlongDims x [0 .. dim x - 1] True) >>
+  print (full (replicate 1 $ dim x) (T.sum x)) >> return (
+  sumAlongDims x [0 .. dim x - 1] True == full (replicate 1 $ dim x) (T.sum x))
+
 prop_copy :: Tensor CFloat -> Bool
 prop_copy x = x `equal` copy x
 
@@ -314,6 +377,31 @@ prop_insert_dim_neg :: Index -> Bool
 prop_insert_dim_neg shape = insertDim x (-1) `equal` zeros (shape ++ [1])
   where
     x = zeros shape :: Tensor CFloat
+
+prop_insert_dim_scalar :: Bool
+prop_insert_dim_scalar = insertDim (scalar 0 :: Tensor CFloat) 0 `equal` single 0
+
+prop_insert_dim_scalar_neg :: Bool
+prop_insert_dim_scalar_neg = insertDim (scalar 0 :: Tensor CFloat) (-1) `equal` single 0
+
+prop_insert_dim_single0 :: Bool
+prop_insert_dim_single0 = insertDim (single 0 :: Tensor CFloat) 0 `equal` zeros [1, 1]
+
+prop_insert_dim_single1 :: Bool
+prop_insert_dim_single1 = insertDim (single 0 :: Tensor CFloat) 1 `equal` zeros [1, 1]
+
+prop_insert_dim_single_neg :: Bool
+prop_insert_dim_single_neg = insertDim (single 0 :: Tensor CFloat) (-1) `equal` zeros [1, 1]
+
+prop_swap_dims_id1 :: Tensor CFloat -> Bool
+prop_swap_dims_id1 x = swapDims xI (0, 0) `equal` xI
+  where
+    xI = insertDim x (-1)
+
+prop_swap_dims_id2 :: Tensor CFloat -> Bool
+prop_swap_dims_id2 x = xI `swapDims` (0, 1) `swapDims` (0, 1) `equal` xI
+  where
+    xI = insertDims x [-1, -2]
 
 
 -- Boolean

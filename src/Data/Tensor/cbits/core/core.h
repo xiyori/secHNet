@@ -64,12 +64,6 @@ validate_tensor_index(
 
 void
 tensor_index(
-    int n_dims,
-    size_t *shape,
-    long long *stride,
-    size_t offset,
-    size_t elem_size,
-    char *dat_from,
     int start_index_dim,
     int n_indices,
     int index_n_dims,
@@ -77,6 +71,12 @@ tensor_index(
     long long **index_strides,
     size_t *index_offsets,
     char **index_dat,
+    int n_dims,
+    size_t *shape,
+    long long *stride,
+    size_t offset,
+    size_t elem_size,
+    char *dat_from,
     char * __restrict dat_to);
 
 #endif

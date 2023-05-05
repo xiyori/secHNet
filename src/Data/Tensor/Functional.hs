@@ -97,9 +97,20 @@ fromList6 listData =
 
 -- | Generate a tensor from a generator function.
 --
+--   /WARNING:/ This function can be very slow
+--   for large tensors. Consider using other
+--   constructors if possible.
+--
 --   Signature: @shape -> generator -> tensor@
-tensor :: HasDtype t => Index -> (Int -> t) -> Tensor t
-tensor shape = tensor_ $ indexToShape shape
+tensor :: HasDtype t => Index -> (Index -> t) -> Tensor t
+tensor shape builder =
+  case indexToShape shape of {tShape ->
+  case flattenCoeffs_ shape of {fCoeffs ->
+  case unravelCoeffs_ shape of {uCoeffs ->
+  case V.generate (fromIntegral $ totalElems_ tShape)
+  $ builder . unravelIndex_ uCoeffs fCoeffs of {dat ->
+    Tensor tShape (computeStride (sizeOfElem dat) tShape) 0 dat
+  }}}}
 
 -- | Generate a tensor from a generator function.
 --
@@ -274,7 +285,7 @@ eye rows columns diagonalIndex
     case (fromIntegral rows,
         fromIntegral columns,
         fromIntegral diagonalIndex) of {(rows, columns, diagonalIndex) ->
-    case scalar 0 :: Tensor t of {sampleTensor ->
+    case empty :: Tensor t of {sampleTensor ->
     case tensorDtype sampleTensor of {dtype ->
     case V.fromList [rows, columns] of {shape ->
       Tensor shape (computeStride (sizeOfElem $ tensorData sampleTensor) shape) 0
@@ -599,6 +610,75 @@ sum x@(Tensor shape stride offset dat) =
 mean :: (HasDtype t, Fractional t) => Tensor t -> t
 mean x = Data.Tensor.Functional.sum x / fromIntegral (numel_ x)
 
+-- | Sum elements of a tensor along specified dims.
+--
+--   Negative dim values are supported.
+--
+--   Signature: @tensor -> dims -> keepDims -> tensor@
+sumAlongDims :: (HasDtype t, Num t) => Tensor t -> [Int] -> Bool -> Tensor t
+sumAlongDims x@(Tensor shape stride offset dat) dims keepDims =
+  case V.length shape of {nDims ->
+  case Prelude.map (normalizeItem nDims) dims of {normDims ->
+    if all (\ dim -> 0 <= dim && dim < nDims) normDims then
+      if length (nub normDims) == length normDims then
+        case filter (not . flip elem normDims) [0 .. nDims - 1] ++ normDims of {dims ->
+        case (sortDims shape dims, sortDims stride dims) of {(shape, stride) ->
+        case fromIntegral $ nDims - length normDims of {startSumDim ->
+        case (
+          if keepDims then
+            V.zipWith (
+              \ axis dim ->
+                if axis `elem` normDims then
+                  1
+                else dim
+            ) (V.fromList [0 .. nDims - 1]) shape
+          else V.take (fromIntegral startSumDim) shape
+        ) of {newShape ->
+        case tensorDtype x of {dtype ->
+        case sizeOfElem dat of {elemSize ->
+        case V.unsafeCast dat of {dataCChar ->
+          Tensor newShape (computeStride elemSize newShape) 0
+          $ unsafePerformIO
+          $ do
+            mutableData <- VM.new $ fromIntegral $ totalElems_ newShape
+            case VM.unsafeCast mutableData of {mutableDataCChar ->
+              [CU.exp| void {
+                sum_along_dims(
+                  $(int startSumDim),
+                  $vec-len:shape,
+                  $vec-ptr:(size_t *shape),
+                  $vec-ptr:(long long *stride),
+                  $(size_t offset),
+                  $(int dtype),
+                  $(size_t elemSize),
+                  $vec-ptr:(char *dataCChar),
+                  $vec-ptr:(char *mutableDataCChar)
+                )
+              } |]
+            }
+            V.unsafeFreeze mutableData
+        }}}}}}}
+      else
+        error
+        $ "duplicate elements in dims "
+        ++ show dims
+    else
+      error
+      $ "dims "
+      ++ show dims
+      ++ " are out of bounds for "
+      ++ show nDims
+      ++ "-dimensional tensor"
+  }}
+
+-- | Sum elements of a tensor along specified dim.
+--
+--   Negative dim values are supported.
+--
+--   Signature: @tensor -> dim -> tensor@
+sumAlongDim :: (HasDtype t, Num t) => Tensor t -> Int -> Tensor t
+sumAlongDim x dim = sumAlongDims x [dim] False
+
 -- | Return a contiguous copy of a tensor.
 copy :: (HasDtype t) => Tensor t -> Tensor t
 copy (Tensor shape stride offset dat) =
@@ -636,7 +716,7 @@ copy (Tensor shape stride offset dat) =
 -- | Cast a tensor to a different dtype.
 astype :: forall a b. (HasDtype a, HasDtype b) => Tensor a -> Tensor b
 astype x@(Tensor shape stride offset dat) =
-  case scalar undefined :: Tensor b of {sampleTensor ->
+  case empty :: Tensor b of {sampleTensor ->
   case tensorDtype sampleTensor of {dtype_to ->
   case tensorDtype x of {dtype_from ->
   case V.unsafeCast dat of {dataCChar ->
@@ -663,7 +743,7 @@ astype x@(Tensor shape stride offset dat) =
 
 -- | Return a tensor with last 2 axes transposed.
 transpose :: HasDtype t => Tensor t -> Tensor t
-transpose x = swapDims x (-1) (-2)
+transpose x = swapDims x (-1, -2)
 
 -- | Return a copy of the tensor collapsed into one dimension.
 flatten :: (HasDtype t) => Tensor t -> Tensor t
@@ -701,48 +781,9 @@ view x@(Tensor shape stride offset dat) newShape =
       ++ show newShape
   }
 
--- sumAlongDim :: (HasDtype t, Num t) =>
---   Tensor t -> Int -> Tensor t
--- sumAlongDim x@(Tensor shape _) dim =
---   tensor newShape (
---     \ index ->
---       let slices = Prelude.map singleton $ toList index in
---         Data.Tensor.sum . slice x
---         $ concat [
---           take nDim slices,
---           [fromList [0 .. (shape ! nDim) - 1]],
---           drop nDim slices
---         ]
---   )
---   where
---     nDim = normalizeItem (V.length shape) dim
---     newShape = V.concat [
---         V.take nDim shape,
---         V.drop (nDim + 1) shape
---       ]
-
--- sumAlongDimKeepDims :: (HasDtype t, Num t) =>
---   Tensor t -> Int -> Tensor t
--- sumAlongDimKeepDims x@(Tensor shape _) dim =
---   tensor newShape (
---     \ index ->
---       let slices = Prelude.map singleton $ toList index in
---         Data.Tensor.sum . slice x
---         $ concat [
---           take nDim slices,
---           [fromList [0 .. (shape ! nDim) - 1]],
---           drop (nDim + 1) slices
---         ]
---   )
---   where
---     nDim = normalizeItem (V.length shape) dim
---     newShape = V.concat [
---         V.take nDim shape,
---         singleton 1,
---         V.drop (nDim + 1) shape
---       ]
-
 -- | Insert a new dim into a tensor.
+--
+--   Negative dim values are supported.
 --
 --   Signature: @tensor -> dim -> tensor@
 insertDim :: (HasDtype t) => Tensor t -> Int -> Tensor t
@@ -768,9 +809,9 @@ insertDim (Tensor shape stride offset dat) dim =
       ++ show shape
   }}
 
--- | Insert a new dims into a tensor.
+-- | Sequentially insert new dims into a tensor.
 --
---   @dims@ specifies indices in the /resulting/ tensor.
+--   Negative dim values are supported.
 --
 --   Signature: @tensor -> dims -> tensor@
 insertDims :: (HasDtype t) => Tensor t -> [Int] -> Tensor t
@@ -792,10 +833,12 @@ insertDims = Data.List.foldl' insertDim
 
 -- | Interchange two dims of a tensor.
 --
---   Signature: @tensor -> dim1 -> dim2 -> tensor@
+--   Negative dim values are supported.
+--
+--   Signature: @tensor -> (dim1, dim2) -> tensor@
 swapDims :: (HasDtype t) =>
-  Tensor t -> Int -> Int -> Tensor t
-swapDims x@(Tensor shape stride offset dat) dim1 dim2 =
+  Tensor t -> (Int, Int) -> Tensor t
+swapDims x@(Tensor shape stride offset dat) (dim1, dim2) =
   case V.length shape of {nDims ->
   case normalizeItem nDims dim1 of {normDim1 ->
   case normalizeItem nDims dim2 of {normDim2 ->
@@ -869,8 +912,7 @@ foldr' f accum x =
 {-# INLINE min #-}
 {-# INLINE max #-}
 {-# INLINE sum #-}
--- {-# INLINE sumAlongDim #-}
--- {-# INLINE sumAlongDimKeepDims #-}
+{-# INLINE sumAlongDims #-}
 {-# INLINE map #-}
 {-# INLINE foldl' #-}
 {-# INLINE foldr' #-}
