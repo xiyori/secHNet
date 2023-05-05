@@ -5,7 +5,7 @@
 
 #define ELEMENTWISE_PROTO(name) \
 void \
-tensor_##name ( \
+tensor_##name( \
     int n_dims, \
     size_t *shape, \
     dtype_t dtype, \
@@ -19,7 +19,7 @@ tensor_##name ( \
 
 #define ELEMENTWISE_GENERIC(dtype, name, dtype_to, operator) \
 void \
-name##_##dtype ( \
+name##_##dtype( \
     int n_dims, \
     size_t *shape, \
     long long *stride1, \
@@ -44,11 +44,11 @@ name##_##dtype ( \
     } \
     /* Vectorize operations for contiguous tensors */ \
     if (last_dim >= SIZEOF_AVX512) { \
-        INIT_INDEX2(vec_n_dims) \
+        INIT_INDEX2(vec_n_dims, dat_from1, dat_from2) \
         for (size_t i = 0; i < numel; ++i) { \
-            char *current_dat_to = dat_to + i * last_dim_to; \
-            char *current_dat_from1 = dat_from1 + f_index1; \
-            char *current_dat_from2 = dat_from2 + f_index2; \
+            char *current_dat_to = dat_to; \
+            char *current_dat_from1 = dat_from1; \
+            char *current_dat_from2 = dat_from2; \
             for (size_t j = 0; j < last_dim / SIZEOF_AVX512; ++j) { \
                 for (size_t k = 0; k < VECTORIZED_SIZE(dtype); ++k) { \
                     ((dtype_to##_t *) current_dat_to)[k] = operator( \
@@ -67,17 +67,19 @@ name##_##dtype ( \
                     ((dtype##_t *) current_dat_from2)[k] \
                 ); \
             } \
-            ADVANCE_INDEX2(vec_n_dims) \
+            dat_to += last_dim_to; \
+            ADVANCE_INDEX2(vec_n_dims, dat_from1, dat_from2) \
         } \
         DESTROY_INDEX() \
     } else { \
-        INIT_INDEX2(n_dims) \
+        INIT_INDEX2(n_dims, dat_from1, dat_from2) \
         for (size_t i = 0; i < numel; ++i) { \
-            *(dtype_to##_t *) (dat_to + i * sizeof(dtype_to##_t)) = operator( \
-                *(dtype##_t *) (dat_from1 + f_index1), \
-                *(dtype##_t *) (dat_from2 + f_index2) \
+            *(dtype_to##_t *) dat_to = operator( \
+                *(dtype##_t *) dat_from1, \
+                *(dtype##_t *) dat_from2 \
             ); \
-            ADVANCE_INDEX2(n_dims) \
+            dat_to += sizeof(dtype_to##_t); \
+            ADVANCE_INDEX2(n_dims, dat_from1, dat_from2) \
         } \
         DESTROY_INDEX() \
     } \

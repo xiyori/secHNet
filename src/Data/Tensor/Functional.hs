@@ -8,7 +8,7 @@ import Control.Monad.IO.Class
 import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
-import Data.List (foldl')
+import Data.List
 import System.Random
 import Data.Random.Normal
 import Data.Tensor.PlainIndex
@@ -308,34 +308,38 @@ broadcast :: (HasDtype a, HasDtype b) =>
   Tensor a -> Tensor b -> (Tensor a, Tensor b)
 broadcast (Tensor shape1 stride1 offset1 dat1)
           (Tensor shape2 stride2 offset2 dat2)
-  | verifyBroadcastable shape1 shape2 =
-    case broadcastShapesStrides shape1 shape2 stride1 stride2
-    of {(shape1, shape2, stride1, stride2) ->
-    case broadcastedShape shape1 shape2 of {newShape ->
-      (
-        Tensor newShape
-        (V.zipWith (
-          \ dim stride ->
-            if dim == 1 then
-              0
-            else stride
-        ) shape1 stride1) offset1 dat1,
-        Tensor newShape
-        (V.zipWith (
-          \ dim stride ->
-            if dim == 1 then
-              0
-            else stride
-        ) shape2 stride2) offset2 dat2
-      )
-    }}
+  | verifyBroadcastable [shape1, shape2] =
+    case broadcastShapesStrides [shape1, shape2] [stride1, stride2]
+    of {(shape, [stride1, stride2]) ->
+      (Tensor shape stride1 offset1 dat1,
+      Tensor shape stride2 offset2 dat2)
+    }
   | otherwise =
     error
     $ "tensors of shapes "
     ++ show shape1
-    ++ ", "
+    ++ " "
     ++ show shape2
     ++ " can not be broadcasted"
+
+-- | Broadcast tensors without copying.
+broadcastN :: HasDtype t => [Tensor t] -> [Tensor t]
+broadcastN xs =
+  case Prelude.map tensorShape xs of {shapes ->
+    if verifyBroadcastable shapes then
+      case broadcastShapesStrides shapes $ Prelude.map tensorStride xs
+      of {(shape, strides) ->
+        zipWith (
+          \ stride (Tensor _ _ offset dat) ->
+            Tensor shape stride offset dat
+        ) strides xs
+      }
+    else
+      error
+      $ "tensors of shapes "
+      ++ unwords (Prelude.map show shapes)
+      ++ " can not be broadcasted"
+  }
 
 -- | Elementwise integer division truncated toward negative infinity.
 (//) :: HasDtype t => Tensor t -> Tensor t -> Tensor t
@@ -466,30 +470,21 @@ elementwise f x1 x2 =
 --   Negative index values are supported.
 (!) :: HasDtype t => Tensor t -> Index -> t
 (!) x@(Tensor shape stride offset dat) index =
-  case normalizeIndex shape $ V.fromList index of {normIndex ->
-    if validateIndex shape normIndex then
-      case V.map fromIntegral normIndex of {index ->
-      case tensorDtype x of {dtype ->
-      case V.unsafeCast dat of {dataCChar ->
-        unsafeDupablePerformIO
-        $ [CU.exp| char * {
-            get_elem(
-              $vec-len:shape,
-              $vec-ptr:(long long *stride),
-              $(size_t offset),
-              $(int dtype),
-              $vec-ptr:(char *dataCChar),
-              $vec-ptr:(size_t *index)
-            )
-          } |] >>= peek . castPtr
-      }}}
-    else
-      error
-      $ "incorrect index "
-      ++ show index
-      ++ " for shape "
-      ++ show shape
-  }
+  case parseIndex shape $ V.fromList index of {index ->
+  case tensorDtype x of {dtype ->
+  case V.unsafeCast dat of {dataCChar ->
+    unsafeDupablePerformIO
+    $ [CU.exp| char * {
+        get_elem(
+          $vec-len:shape,
+          $vec-ptr:(long long *stride),
+          $(size_t offset),
+          $(int dtype),
+          $vec-ptr:(char *dataCChar),
+          $vec-ptr:(size_t *index)
+        )
+      } |] >>= peek . castPtr
+  }}}
 
 -- | Return the value of a tensor with one element.
 item :: (HasDtype t) => Tensor t -> t
@@ -526,7 +521,7 @@ min x@(Tensor shape stride offset dat)
     case V.unsafeCast dat of {dataCChar ->
     case tensorDtype x of {dtype ->
       unsafePerformIO
-      $ allocaBytes (fromIntegral $ sizeOfElem dat) (
+      $ alloca (
         \ outCCharPtr -> do
           [CU.exp| void {
             tensor_min(
@@ -554,7 +549,7 @@ max x@(Tensor shape stride offset dat)
     case V.unsafeCast dat of {dataCChar ->
     case tensorDtype x of {dtype ->
       unsafePerformIO
-      $ allocaBytes (fromIntegral $ sizeOfElem dat) (
+      $ alloca (
         \ outCCharPtr -> do
           [CU.exp| void {
             tensor_max(
@@ -581,7 +576,7 @@ sum x@(Tensor shape stride offset dat) =
   case V.unsafeCast dat of {dataCChar ->
   case tensorDtype x of {dtype ->
     unsafePerformIO
-    $ allocaBytes (fromIntegral $ sizeOfElem dat) (
+    $ alloca (
       \ outCCharPtr -> do
         [CU.exp| void {
           tensor_sum(
@@ -753,7 +748,7 @@ view x@(Tensor shape stride offset dat) newShape =
 insertDim :: (HasDtype t) => Tensor t -> Int -> Tensor t
 insertDim (Tensor shape stride offset dat) dim =
   case V.length shape of {nDims ->
-  case normalizeItem nDims dim of {normDim ->
+  case normalizeNewDim nDims dim of {normDim ->
     if 0 <= normDim && normDim <= nDims then
       Tensor
       (V.concat [

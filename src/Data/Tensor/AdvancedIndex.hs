@@ -6,14 +6,16 @@
 
 module Data.Tensor.AdvancedIndex where
 
+import Control.Monad
 import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
 import Data.List
+import Data.Either
 import Data.Tensor.PlainIndex
 import Data.Tensor.Size
 import Data.Tensor.Definitions
-import Data.Tensor.Functional (insertDims)
+import Data.Tensor.Functional (insertDims, broadcastN, dim)
 import qualified Data.Tensor.Functional as T
 import Data.Tensor.Instances
 import qualified Data.Tensor.Boolean
@@ -123,9 +125,11 @@ parseNoneIndexer nDims indexers =
         (elemIndices None indexers, parsedIndexers)
       [dim] ->
         (elemIndices None (take dim indexers)
-         ++ map (nDims - length indexers + dim +)
-            (elemIndices None (drop dim indexers)),
-        parsedIndexers)
+         ++ map (-1 -) (
+          elemIndices None
+          $ reverse
+          $ drop dim indexers
+        ), parsedIndexers)
       _ ->
         error "indexers can only have a single ellipsis \'Ell\'"
   }
@@ -145,8 +149,56 @@ parseEllIndexer nDims indexers =
     _ ->
       error "indexers can only have a single ellipsis \'Ell\'"
 
-parseTensorIndexer :: Indexers -> (b, Indexers)
-parseTensorIndexer = error ""
+-- | Parse integer tensor indexers and validate their correctness.
+--
+--   Signature: @shape -> indexers -> (tensorIndexers, sliceIndexers)@
+parseTensorIndexer :: Shape -> Indexers -> ([Either (Int, Tensor CLLong) Int], Indexers)
+parseTensorIndexer shape indexers =
+  (zipWith (
+    \ axis (dim, indexer) ->
+      case indexer of
+        T tI@(Tensor shape stride offset dat) ->
+          case V.unsafeCast dat of {dataCChar ->
+            unsafePerformIO
+            $ alloca
+            $ \ outPtr -> do
+                isValid <- [CU.exp| int {
+                    validate_tensor_index(
+                      $(size_t dim),
+                      $vec-len:shape,
+                      $vec-ptr:(size_t *shape),
+                      $vec-ptr:(long long *stride),
+                      $(size_t offset),
+                      $vec-ptr:(char *dataCChar),
+                      $(long long *outPtr)
+                    )
+                  } |]
+                if toBool isValid then
+                  return $ Left (axis, tI)
+                else do
+                  i <- peek outPtr
+                  error
+                    $ "index "
+                    ++ show i
+                    ++ " is out of bounds for dim "
+                    ++ show axis
+                    ++ " with size "
+                    ++ show dim
+          }
+        _ ->
+          Right axis
+  ) [0 .. V.length shape - 1]
+  $ filter (
+    \case
+      (_, I _) -> False
+      _        -> True
+  )
+  $ zip (V.toList shape) indexers,
+  map (
+    \case
+      T _     -> A
+      indexer -> indexer
+  ) indexers)
 
 -- | Parse negative indexer values.
 --
@@ -211,7 +263,7 @@ normalizeIndexer axis dim indexer step
 parseIndexers :: Shape -> Indexers -> Indexers
 parseIndexers shape indexers =
   case V.length shape of {nDims ->
-    if length indexers <= nDims then
+    if length indexers == nDims then
       zipWith3 (
         \ axis dim indexer ->
           case indexer of
@@ -232,23 +284,18 @@ parseIndexers shape indexers =
       ++ " were indexed"
   }
 
--- | Perform slicing and advanced indexing.
---
---   Negative values in indexer bounds and index tensors are supported.
-(!:) :: (HasDtype t) => Tensor t -> Indexers -> Tensor t
-(!:) x@(Tensor shape _ _ _) indexers =
-  case parseNoneIndexer (V.length shape) indexers of {(dimsToInsert, indexers) ->
-  case insertDims x dimsToInsert of {(Tensor shape stride offset dat) ->
-  case parseEllIndexer (V.length shape) indexers of {indexers ->
+-- | Perform slicing only.
+slice :: (HasDtype t) => Tensor t -> Indexers -> Tensor t
+slice x@(Tensor shape stride offset dat) indexers =
   case parseIndexers shape indexers of {indexers ->
-    Tensor (V.fromList $ Prelude.map (
-      \ (I start :. end :. step) -> fromIntegral $ (end - start) `Prelude.div` step
+    Tensor (V.fromList $ map (
+      \ (I start :. end :. step) -> fromIntegral $ (end - start) `div` step
     ) $ filter (
       \case
         I _ -> False
         _   -> True
     ) indexers)
-    (V.fromList $ Prelude.map (
+    (V.fromList $ map (
       \ (_ :. _ :. step, stride) ->
         stride * fromIntegral step
     ) $ filter (
@@ -257,7 +304,7 @@ parseIndexers shape indexers =
           I _ -> False
           _   -> True
     ) $ zip indexers $ V.toList stride)
-    ((+) offset $ Prelude.sum $ zipWith (
+    ((+) offset $ sum $ zipWith (
       \ indexer stride ->
         case indexer of
           I start :. end :. step ->
@@ -265,11 +312,92 @@ parseIndexers shape indexers =
           I i ->
             fromIntegral $ fromIntegral i * stride
     ) indexers $ V.toList stride) dat
-  }}}}
+  }
+
+-- | Perform slicing and advanced indexing.
+--
+--   Negative values in indexer bounds and index tensors are supported.
+(!:) :: (HasDtype t) => Tensor t -> Indexers -> Tensor t
+(!:) x@(Tensor shape _ _ _) indexers =
+  case parseNoneIndexer (V.length shape) indexers of {(dimsToInsert, indexers) ->
+  case insertDims x dimsToInsert of {x@(Tensor shape _ _ _) ->
+  case parseEllIndexer (V.length shape) indexers of {indexers ->
+  case parseTensorIndexer shape indexers of {(tensorIndexers, indexers) ->
+  case slice x indexers of {x@(Tensor shape stride offset dat) ->
+  case partitionEithers tensorIndexers of {(tensorIndexers, residualDims) ->
+    if not $ null tensorIndexers then
+      case map fst tensorIndexers of {tensorDims ->
+      -- If tensor indexers are separated by None, Ell or Slice,
+      -- indexed dims come first in the resulting tensor.
+      case (
+        if findGap tensorDims then
+          case tensorDims ++ residualDims of {dims ->
+            (0, sortDims shape dims, sortDims stride dims)
+          }
+        else (fromIntegral $ head tensorDims, shape, stride)
+      ) of {(startIndexDim, shape, stride) ->
+      case broadcastN $ map snd tensorIndexers of {tensorIndexers ->
+      case fromIntegral $ length tensorIndexers of {nIndices ->
+      case fromIntegral $ dim $ head tensorIndexers of {indexNDims ->
+      case tensorShape $ head tensorIndexers of {indexShape ->
+      case V.concat [
+        V.take (fromIntegral startIndexDim) shape,
+        indexShape,
+        V.drop (fromIntegral (startIndexDim + nIndices)) shape
+      ] of {newShape ->
+      -- unsafePerformIO
+      -- $ print (startIndexDim, nIndices, indexNDims, indexShape, newShape) >> return (
+      case sizeOfElem dat of {elemSize ->
+      case V.unsafeCast dat of {dataCChar ->
+          Tensor newShape (computeStride elemSize newShape) 0
+          $ unsafePerformIO
+          $ allocaBytes (fromIntegral nIndices * sizeOf (undefined :: Ptr CLLong))
+          $ \ indexStridesPtr ->
+            allocaBytes (fromIntegral nIndices * sizeOf (undefined :: CSize))
+            $ \ indexOffsetsPtr ->
+              allocaBytes (fromIntegral nIndices * sizeOf (undefined :: Ptr CChar))
+              $ \ indexDatPtr -> do
+                zipWithM_ (
+                  \ i (Tensor _ stride offset dat) -> do
+                    V.unsafeWith stride $ poke $ advancePtr indexStridesPtr i
+                    poke (advancePtr indexOffsetsPtr i) offset
+                    V.unsafeWith (V.unsafeCast dat) $ poke $ advancePtr indexDatPtr i
+                  ) [0 .. fromIntegral nIndices - 1] tensorIndexers
+                mutableData <- VM.new $ fromIntegral $ totalElems_ newShape
+                case VM.unsafeCast mutableData of {mutableDataCChar ->
+                  [CU.exp| void {
+                    tensor_index(
+                      $vec-len:shape,
+                      $vec-ptr:(size_t *shape),
+                      $vec-ptr:(long long *stride),
+                      $(size_t offset),
+                      $(size_t elemSize),
+                      $vec-ptr:(char *dataCChar),
+                      $(int startIndexDim),
+                      $(int nIndices),
+                      $(int indexNDims),
+                      $vec-ptr:(size_t *indexShape),
+                      $(long long **indexStridesPtr),
+                      $(size_t *indexOffsetsPtr),
+                      $(char **indexDatPtr),
+                      $vec-ptr:(char *mutableDataCChar)
+                    )
+                  } |]
+                }
+                V.unsafeFreeze mutableData
+      }}}}}}}}}
+    else x
+  }}}}}}
+    where
+      findGap [] = False
+      findGap [_] = False
+      findGap (dim1 : dim2 : dims) = dim2 - dim1 > 1 || findGap (dim2 : dims)
+      sortDims vec = V.map (vec V.!) . V.fromList
 
 {-# INLINE parseNoneIndexer #-}
 {-# INLINE parseEllIndexer #-}
 {-# INLINE parseTensorIndexer #-}
 {-# INLINE normalizeIndexer #-}
 {-# INLINE parseIndexers #-}
+{-# INLINE slice #-}
 {-# INLINE (!:) #-}

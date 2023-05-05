@@ -3,6 +3,7 @@ module Data.Tensor.PlainIndex where
 import Data.Vector.Storable (Storable, Vector, (!), (//))
 import qualified Data.Vector.Storable as V
 import Data.List
+import Data.Maybe
 import Data.Tensor.Definitions
 
 import Foreign
@@ -77,46 +78,84 @@ normalizeItem dim i =
 -- | Parse negative index values.
 --
 --   Signature: @shape -> index -> normIndex@
-normalizeIndex :: Shape -> Vector Int -> Vector Int
-normalizeIndex = V.zipWith normalizeItem
+parseIndex :: Shape -> Vector Int -> Shape
+parseIndex shape index =
+  case V.length shape of {nDims ->
+    if V.length index == nDims then
+      V.zipWith3 (
+        \ axis dim i ->
+          case normalizeItem dim i of {normI ->
+            if 0 <= normI && normI < fromIntegral dim then
+              fromIntegral normI
+            else
+              error
+              $ "index "
+              ++ show i
+              ++ " is out of bounds for dim "
+              ++ show axis
+              ++ " with size "
+              ++ show dim
+          }
+      ) (V.fromList [0 .. nDims - 1]) shape index
+    else
+      error
+      $ "too many indices for tensor: tensor is "
+      ++ show nDims
+      ++ "-dimensional, but "
+      ++ show (V.length index)
+      ++ " were indexed"
+  }
 
--- | Determine if two shapes can be broadcasted.
+-- | Determine if all elements in a list are equal.
+allEqual :: Eq a => [a] -> Bool
+allEqual [] = True
+allEqual xs = all (== head xs) $ tail xs
+
+-- | Determine if shapes can be broadcasted.
 --
---   Signature: @shape1 -> shape2 -> canBroadcast@
-verifyBroadcastable :: Shape -> Shape -> Bool
-verifyBroadcastable shape1 shape2 =
-  V.and (
-    V.zipWith (
-      \ dim1 dim2 -> dim1 == dim2 || dim1 == 1 || dim2 == 1
-    ) (V.reverse shape1) (V.reverse shape2)
-  )
+--   Signature: @shapes -> canBroadcast@
+verifyBroadcastable :: [Shape] -> Bool
+verifyBroadcastable shapes =
+  go $ map V.reverse shapes
+    where
+      go shapes
+        | any V.null shapes = True
+        | otherwise = allEqual (filter (/= 1) $ map V.head shapes) &&
+                      go (map V.tail shapes)
 
 -- | Broadcast shapes and strides.
 --
---   Signature: @shape1 -> shape2 -> stride1 -> stride2 ->
---                (shape1, shape2, stride1, stride2)@
-broadcastShapesStrides ::
-  Shape -> Shape -> Stride -> Stride -> (Shape, Shape, Stride, Stride)
-broadcastShapesStrides shape1 shape2 stride1 stride2 =
-  case V.length shape1 of {nDims1 ->
-  case V.length shape2 of {nDims2 ->
-    (V.concat [V.take (nDims2 - nDims1) shape2, shape1],
-     V.concat [V.take (nDims1 - nDims2) shape1, shape2],
-     V.concat [V.replicate (nDims2 - nDims1) 0, stride1],
-     V.concat [V.replicate (nDims1 - nDims2) 0, stride2])
+--   Signature: @shapes -> strides -> (shape, strides)@
+broadcastShapesStrides :: [Shape] -> [Stride] -> (Shape, [Stride])
+broadcastShapesStrides shapes strides =
+  case foldl' (
+    \ accum@(maxLen, _) shape ->
+      if V.length shape > maxLen then
+        (V.length shape, shape)
+      else accum
+  ) (0, V.empty) shapes of {(nDims, maxShape) ->
+  case map (
+    \ shape ->
+      V.take (nDims - V.length shape) maxShape
+      V.++ shape
+  ) shapes of {expandedShapes ->
+    (V.generate (V.length $ head expandedShapes) (
+      \ dim ->
+        fromMaybe 1
+        $ find (/= 1)
+        $ map (V.! dim) expandedShapes
+    ),
+    zipWith (
+      \ shape stride ->
+        V.replicate (nDims - V.length stride) 0
+        V.++ V.zipWith (
+          \ dim stride ->
+            if dim == 1 then
+              0
+            else stride
+        ) shape stride
+    ) shapes strides)
   }}
-
--- | Resulting shape after broadcasting.
---
---   Signature: @shape1 -> shape2 -> newShape@
-broadcastedShape :: Shape -> Shape -> Shape
-broadcastedShape =
-  V.zipWith (
-      \ dim1 dim2 ->
-      if dim1 == 1 then
-        dim2
-      else dim1
-  )
 
 -- | Parse -1 in new shape in @view@.
 --
@@ -151,9 +190,14 @@ parseNewShape shape newShape =
       $ "can only specify one unknown dimension "
       ++ show newShape
 
--- | Determine if all elements in a list are equal.
-allEqual :: Eq a => [a] -> Bool
-allEqual xs = all (== head xs) $ tail xs
+-- | Parse negative index value.
+--
+--   Signature: @dim -> i -> normI@
+normalizeNewDim :: (Integral a, Integral b) => a -> b -> b
+normalizeNewDim nDims dim =
+  if dim < 0 then
+    fromIntegral nDims + 1 + dim
+  else dim
 
 -- | Swap index dimensions.
 --
@@ -166,12 +210,11 @@ swapElementsAt index dim1 dim2 =
 {-# INLINE totalElems #-}
 {-# INLINE totalElems_ #-}
 {-# INLINE computeStride #-}
-{-# INLINE validateIndex #-}
 {-# INLINE normalizeItem #-}
-{-# INLINE normalizeIndex #-}
+{-# INLINE parseIndex #-}
+{-# INLINE allEqual #-}
 {-# INLINE verifyBroadcastable #-}
 {-# INLINE broadcastShapesStrides #-}
-{-# INLINE broadcastedShape #-}
 {-# INLINE parseNewShape #-}
-{-# INLINE allEqual #-}
+{-# INLINE normalizeNewDim #-}
 {-# INLINE swapElementsAt #-}

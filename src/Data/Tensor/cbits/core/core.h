@@ -26,12 +26,12 @@ get_elem(
     size_t *index);
 
 size_t
-total_elems (
+total_elems(
     int n_dims,
     size_t *shape);
 
 void
-copy (
+copy(
     int n_dims,
     size_t *shape,
     long long *stride,
@@ -41,7 +41,7 @@ copy (
     char * __restrict dat_to);
 
 int
-equal (
+equal(
     int n_dims,
     size_t *shape,
     size_t elem_size,
@@ -51,5 +51,32 @@ equal (
     long long *stride2,
     size_t offset2,
     char *dat2);
+
+int
+validate_tensor_index(
+    size_t dim,
+    int n_dims,
+    size_t *shape,
+    long long *stride,
+    size_t offset,
+    char *dat,
+    long long *out);
+
+void
+tensor_index(
+    int n_dims,
+    size_t *shape,
+    long long *stride,
+    size_t offset,
+    size_t elem_size,
+    char *dat_from,
+    int start_index_dim,
+    int n_indices,
+    int index_n_dims,
+    size_t *index_shape,
+    long long **index_strides,
+    size_t *index_offsets,
+    char **index_dat,
+    char * __restrict dat_to);
 
 #endif

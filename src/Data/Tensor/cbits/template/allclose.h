@@ -5,7 +5,7 @@
 
 #define ALLCLOSE_PROTO(ignored) \
 int \
-tensor_allclose ( \
+tensor_allclose( \
     float64_t rtol, \
     float64_t atol, \
     int n_dims, \
@@ -20,7 +20,7 @@ tensor_allclose ( \
 
 #define ALLCLOSE(dtype, ignored, abs_function) \
 int \
-allclose_##dtype ( \
+allclose_##dtype( \
     dtype##_t rtol, \
     dtype##_t atol, \
     int n_dims, \
@@ -32,14 +32,14 @@ allclose_##dtype ( \
     size_t offset2, \
     char *dat2) \
 { \
-    INIT_INDEX2(n_dims) \
+    INIT_INDEX2(n_dims, dat1, dat2) \
     for (size_t i = 0; i < numel; ++i) { \
-        dtype##_t elem1 = *(dtype##_t *) (dat1 + f_index1); \
-        dtype##_t elem2 = *(dtype##_t *) (dat2 + f_index2); \
+        dtype##_t elem1 = *(dtype##_t *) dat1; \
+        dtype##_t elem2 = *(dtype##_t *) dat2; \
         if (abs_function(elem1 - elem2) > (atol + rtol * abs_function(elem2))) { \
             return 0; \
         } \
-        ADVANCE_INDEX2(n_dims) \
+        ADVANCE_INDEX2(n_dims, dat1, dat2) \
     } \
     DESTROY_INDEX() \
     return 1; \

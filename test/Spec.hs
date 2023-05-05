@@ -14,9 +14,13 @@ import Data.Tensor (
       (|.),
       Tensor(Tensor, tensorOffset, tensorData),
       HasArange(arange),
-      Indexer(I, S, E, (:.), Ell, None, A),
+      Indexer(I, A, S, E, (:.), T, Ell, None),
       Index,
+      fromList,
+      fromList2,
       fromList3,
+      fromList4,
+      fromList5,
       tensor,
       full,
       zeros,
@@ -203,97 +207,6 @@ prop_getelem_scalar = scalar (0 :: CFloat) ! [] == 0
 prop_getelem_single ::  Bool
 prop_getelem_single = single (0 :: CFloat) ! [0] == 0
 
-prop_slice_index :: Tensor CFloat -> Bool
-prop_slice_index x
-  | numel x /= 0 = scalar (x ! replicate (dim x) 0) `equal` x !: replicate (dim x) 0
-  | otherwise    = True
-
-prop_slice_single :: Tensor CFloat -> Bool
-prop_slice_single x
-  | numel x /= 0 = x ! replicate (dim x) 0 == item (x !: replicate (dim x) (0:.1))
-  | otherwise    = True
-
-prop_slice_all :: Tensor CFloat -> Bool
-prop_slice_all x = x !: replicate (dim x) A `equal` x
-
-prop_slice_all0 :: Tensor CFloat -> Bool
-prop_slice_all0 x = x !: [] `equal` x
-
-prop_slice_all1 :: Tensor CFloat -> Bool
-prop_slice_all1 x
-  | dim x > 0 = x !: [A] `equal` x
-  | otherwise = True
-
-prop_slice_start_all :: Tensor CFloat -> Bool
-prop_slice_start_all x = x !: replicate (dim x) (S 0) `equal` x
-
-prop_slice_start1_all :: Tensor CFloat -> Bool
-prop_slice_start1_all x
-  | dim x > 0 = x !: [S 0] `equal` x
-  | otherwise = True
-
-prop_slice_start_equiv :: Tensor CFloat -> Bool
-prop_slice_start_equiv x
-  | dim x > 0 = x !: [S 1] `equal` x !: [1 :. head (shape x)]
-  | otherwise = True
-
-prop_slice_end_all :: Tensor CFloat -> Bool
-prop_slice_end_all x = x !: map E (shape x) `equal` x
-
-prop_slice_end1_all :: Tensor CFloat -> Bool
-prop_slice_end1_all x
-  | dim x > 0 = x !: [E $ head $ shape x] `equal` x
-  | otherwise = True
-
-prop_slice_end_equiv :: Tensor CFloat -> Bool
-prop_slice_end_equiv x
-  | dim x > 0 = x !: [E (-1)] `equal` x !: [0 :. head (shape x) - 1]
-  | otherwise = True
-
-prop_slice_negative :: Tensor CFloat -> Bool
-prop_slice_negative x
-  | dim x > 0 =
-    x !: [-3:. -1] `equal` x !: [I (max 0 (head (shape x) - 3)) :. head (shape x) - 1]
-  | otherwise = True
-
-prop_slice_none :: Tensor CFloat -> Bool
-prop_slice_none x = insertDim x 0 `equal` x !: [None]
-
-prop_slice_ell :: Tensor CFloat -> Bool
-prop_slice_ell x
-  | dim x > 0 =
-    x !: [Ell, 0:.1] `equal`
-    x !: (replicate (dim x - 1) A ++ [0 :. 1])
-  | otherwise =
-    True
-
-prop_slice_insert_dim :: Tensor CFloat -> Bool
-prop_slice_insert_dim x = insertDim x (-1) `equal` x !: [Ell, None]
-
-prop_slice_step1 :: Tensor CFloat -> Bool
-prop_slice_step1 x = x !: replicate (dim x) (A :. 1) `equal` x
-
-prop_slice_step11 :: Tensor CFloat -> Bool
-prop_slice_step11 x
-  | dim x > 0 = x !: [A :. 1] `equal` x
-  | otherwise          = True
-
-prop_slice_neg_step_id :: Tensor CFloat -> Bool
-prop_slice_neg_step_id x = x !: slice !: slice `equal` x
-  where
-    slice = replicate (dim x) (A :. -1)
-
-prop_slice_neg_step_id1 :: Tensor CFloat -> Bool
-prop_slice_neg_step_id1 x
-  | dim x > 0 = x !: [A :. -1] !: [A :. -1] `equal` x
-  | otherwise = True
-
-prop_slice_step :: Bool
-prop_slice_step = (arange 0 10 1 :: Tensor CFloat) !: [A :. 2] `equal` arange 0 10 2
-
-prop_slice_neg_step :: Bool
-prop_slice_neg_step = (arange 0 10 1 :: Tensor CFloat) !: [A :. -2] `allClose` arange 9 (-1) (-2)
-
 prop_numel :: Index -> Bool
 prop_numel shape = numel x == V.length (tensorData x)
   where
@@ -394,6 +307,11 @@ prop_view_neg3 x
 
 prop_insert_dim :: Index -> Bool
 prop_insert_dim shape = insertDim x 0 `equal` zeros (1 : shape)
+  where
+    x = zeros shape :: Tensor CFloat
+
+prop_insert_dim_neg :: Index -> Bool
+prop_insert_dim_neg shape = insertDim x (-1) `equal` zeros (shape ++ [1])
   where
     x = zeros shape :: Tensor CFloat
 
@@ -523,6 +441,268 @@ prop_show_empty :: Bool
 prop_show_empty =
   show (zeros [1, 2, 0] :: Tensor CFloat) ==
   "tensor([], shape=[1,2,0], dtype=float32)"
+
+
+-- AdvancedIndex
+-- -------------
+
+prop_slice_index :: Tensor CFloat -> Bool
+prop_slice_index x
+  | numel x /= 0 = scalar (x ! replicate (dim x) 0) `equal` x !: replicate (dim x) 0
+  | otherwise    = True
+
+prop_slice_single :: Tensor CFloat -> Bool
+prop_slice_single x
+  | numel x /= 0 = x ! replicate (dim x) 0 == item (x !: replicate (dim x) (0:.1))
+  | otherwise    = True
+
+prop_slice_all :: Tensor CFloat -> Bool
+prop_slice_all x = x !: replicate (dim x) A `equal` x
+
+prop_slice_all0 :: Tensor CFloat -> Bool
+prop_slice_all0 x = x !: [] `equal` x
+
+prop_slice_all1 :: Tensor CFloat -> Bool
+prop_slice_all1 x
+  | dim x > 0 = x !: [A] `equal` x
+  | otherwise = True
+
+prop_slice_start_all :: Tensor CFloat -> Bool
+prop_slice_start_all x = x !: replicate (dim x) (S 0) `equal` x
+
+prop_slice_start1_all :: Tensor CFloat -> Bool
+prop_slice_start1_all x
+  | dim x > 0 = x !: [S 0] `equal` x
+  | otherwise = True
+
+prop_slice_start_equiv :: Tensor CFloat -> Bool
+prop_slice_start_equiv x
+  | dim x > 0 = x !: [S 1] `equal` x !: [1 :. head (shape x)]
+  | otherwise = True
+
+prop_slice_end_all :: Tensor CFloat -> Bool
+prop_slice_end_all x = x !: map E (shape x) `equal` x
+
+prop_slice_end1_all :: Tensor CFloat -> Bool
+prop_slice_end1_all x
+  | dim x > 0 = x !: [E $ head $ shape x] `equal` x
+  | otherwise = True
+
+prop_slice_end_equiv :: Tensor CFloat -> Bool
+prop_slice_end_equiv x
+  | dim x > 0 = x !: [E (-1)] `equal` x !: [0 :. head (shape x) - 1]
+  | otherwise = True
+
+prop_slice_neg :: Tensor CFloat -> Bool
+prop_slice_neg x
+  | dim x > 0 =
+    x !: [-3:. -1] `equal` x !: [I (max 0 (head (shape x) - 3)) :. head (shape x) - 1]
+  | otherwise = True
+
+prop_slice_none :: Tensor CFloat -> Bool
+prop_slice_none x = insertDim x 0 `equal` x !: [None]
+
+prop_slice_ell :: Tensor CFloat -> Bool
+prop_slice_ell x
+  | dim x > 0 =
+    x !: [Ell, 0:.1] `equal`
+    x !: (replicate (dim x - 1) A ++ [0 :. 1])
+  | otherwise =
+    True
+
+prop_slice_insert_dim :: Tensor CFloat -> Bool
+prop_slice_insert_dim x = insertDim x (-1) `equal` x !: [Ell, None]
+
+prop_slice_step1 :: Tensor CFloat -> Bool
+prop_slice_step1 x = x !: replicate (dim x) (A :. 1) `equal` x
+
+prop_slice_step11 :: Tensor CFloat -> Bool
+prop_slice_step11 x
+  | dim x > 0 = x !: [A :. 1] `equal` x
+  | otherwise          = True
+
+prop_slice_neg_step_id :: Tensor CFloat -> Bool
+prop_slice_neg_step_id x = x !: slice !: slice `equal` x
+  where
+    slice = replicate (dim x) (A :. -1)
+
+prop_slice_neg_step_id1 :: Tensor CFloat -> Bool
+prop_slice_neg_step_id1 x
+  | dim x > 0 = x !: [A :. -1] !: [A :. -1] `equal` x
+  | otherwise = True
+
+prop_slice_step :: Bool
+prop_slice_step = (arange 0 10 1 :: Tensor CFloat) !: [A :. 2] `equal` arange 0 10 2
+
+prop_slice_neg_step :: Bool
+prop_slice_neg_step = (arange 0 10 1 :: Tensor CFloat) !: [A :. -2] `allClose` arange 9 (-1) (-2)
+
+prop_itensor_index :: Tensor CFloat -> Bool
+prop_itensor_index x
+  | numel x /= 0 = scalar (x ! replicate (dim x) 0) `equal` x !: replicate (dim x) (T $ scalar 0)
+  | otherwise    = True
+
+prop_itensor_single :: Tensor CFloat -> Bool
+prop_itensor_single x
+  | numel x /= 0 = x ! replicate (dim x) 0 == item (x !: replicate (dim x) (T $ single 0))
+  | otherwise    = True
+
+-- prop_itensor_all :: Tensor CFloat -> Bool
+-- prop_itensor_all x = x !: split (indices $ shape x) 0 == x
+
+unit_x :: Tensor CFloat
+unit_x = arange 0 (2 * 3 * 7) 1 `view` [2, 3, 7]
+
+prop_slice_unit1 :: Bool
+prop_slice_unit1 = unit_x !: [A, None, 0, None, A, None] ==
+  fromList5 [[[[[ 0],
+                [ 1],
+                [ 2],
+                [ 3],
+                [ 4],
+                [ 5],
+                [ 6]]]],
+
+
+
+            [[[[21],
+                [22],
+                [23],
+                [24],
+                [25],
+                [26],
+                [27]]]]]
+
+prop_slice_unit2 :: Bool
+prop_slice_unit2 = unit_x !: [None, Ell, None] ==
+  fromList5 [[[[[ 0],
+                [ 1],
+                [ 2],
+                [ 3],
+                [ 4],
+                [ 5],
+                [ 6]],
+
+              [[ 7],
+                [ 8],
+                [ 9],
+                [10],
+                [11],
+                [12],
+                [13]],
+
+              [[14],
+                [15],
+                [16],
+                [17],
+                [18],
+                [19],
+                [20]]],
+
+
+              [[[21],
+                [22],
+                [23],
+                [24],
+                [25],
+                [26],
+                [27]],
+
+              [[28],
+                [29],
+                [30],
+                [31],
+                [32],
+                [33],
+                [34]],
+
+              [[35],
+                [36],
+                [37],
+                [38],
+                [39],
+                [40],
+                [41]]]]]
+
+prop_slice_unit3 :: Bool
+prop_slice_unit3 = unit_x !: [Ell, None, 2 :. 9] ==
+  fromList4 [[[[ 2,  3,  4,  5,  6]],
+
+              [[ 9, 10, 11, 12, 13]],
+
+              [[16, 17, 18, 19, 20]]],
+
+
+            [[[23, 24, 25, 26, 27]],
+
+              [[30, 31, 32, 33, 34]],
+
+              [[37, 38, 39, 40, 41]]]]
+
+prop_slice_unit4 :: Bool
+prop_slice_unit4 = unit_x !: [Ell, 5 :. 9, None] ==
+  fromList4 [[[[ 5],
+               [ 6]],
+
+              [[12],
+               [13]],
+
+              [[19],
+               [20]]],
+
+
+             [[[26],
+               [27]],
+
+              [[33],
+               [34]],
+
+              [[40],
+               [41]]]]
+
+prop_slice_unit5 :: Bool
+prop_slice_unit5 = unit_x !: [Ell, -7 :. -2 :. -1, None] == zeros [2, 3, 0, 1]
+
+prop_itensor_unit1 :: Bool
+prop_itensor_unit1 = unit_x !: [A, 0, T $ fromList [1, 2, 3]] ==
+  fromList2 [[ 1,  2,  3],
+             [22, 23, 24]]
+
+prop_itensor_unit2 :: Bool
+prop_itensor_unit2 = unit_x !: [None, Ell, T $ fromList [0, -1, 3]] ==
+  fromList4 [[[[ 0,  6,  3],
+               [ 7, 13, 10],
+               [14, 20, 17]],
+
+              [[21, 27, 24],
+               [28, 34, 31],
+               [35, 41, 38]]]]
+
+prop_itensor_unit3 :: Bool
+prop_itensor_unit3 = unit_x !: [None, T $ fromList2 [[0, -1, -1],
+                                                     [1,  1,  0]],
+                                      T $ fromList [0, -1, -2], 0] ==
+  fromList3 [[[ 0, 35, 28],
+              [21, 35,  7]]]
+
+prop_itensor_unit4 :: Bool
+prop_itensor_unit4 = unit_x !: [T $ fromList2 [[0, -1, -1],
+                                               [1,  1,  0]],
+                                S 1, T $ fromList [0, -1, -2]] ==
+  fromList3 [[[ 7, 14],
+              [34, 41],
+              [33, 40]],
+
+            [[28, 35],
+              [34, 41],
+              [12, 19]]]
+
+prop_itensor_unit5 :: Bool
+prop_itensor_unit5 = unit_x !: [T $ fromList2 [[0, -1, -1],
+                                               [1,  1,  0]],
+                                1, T $ fromList [0, -1, -2]] ==
+  fromList2 [[ 7, 34, 33],
+             [28, 34, 12]]
 
 return []
 

@@ -6,7 +6,7 @@
 - [x] refactor c code
 - [x] astype
 - [x] integer division, mod
-- [ ] advancedIndex
+- [x] advancedIndex
 - [ ] sumAlongDim
 - [ ] matmul
 - [ ] conv

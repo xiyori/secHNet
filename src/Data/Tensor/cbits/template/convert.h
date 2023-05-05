@@ -5,7 +5,7 @@
 
 #define CONVERT_PROTO(ignored) \
 void \
-tensor_astype ( \
+tensor_astype( \
     int n_dims, \
     size_t *shape, \
     long long *stride, \

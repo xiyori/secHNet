@@ -5,7 +5,7 @@
 
 #define FOLD_PROTO(name) \
 void \
-tensor_##name ( \
+tensor_##name( \
     int n_dims, \
     size_t *shape, \
     long long *stride, \
@@ -16,18 +16,18 @@ tensor_##name ( \
 
 #define FOLD(dtype, name, function) \
 dtype##_t \
-name##_##dtype ( \
+name##_##dtype( \
     int n_dims, \
     size_t *shape, \
     long long *stride, \
     size_t offset, \
     char *dat) \
 { \
-    INIT_INDEX(n_dims) \
+    INIT_INDEX(n_dims, dat) \
     function##_INIT(dtype) \
     for (size_t i = 0; i < numel; ++i) { \
-        function##_STEP(dtype, *(dtype##_t *) (dat + f_index)) \
-        ADVANCE_INDEX(n_dims) \
+        function##_STEP(dtype, *(dtype##_t *) dat) \
+        ADVANCE_INDEX(n_dims, dat) \
     } \
     DESTROY_INDEX() \
     return accum; \

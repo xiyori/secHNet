@@ -5,7 +5,7 @@
 
 #define EYE_PROTO(ignored) \
 void \
-tensor_eye ( \
+tensor_eye( \
     size_t rows, \
     size_t columns, \
     long long k, \
@@ -14,7 +14,7 @@ tensor_eye ( \
 
 #define EYE(dtype, ignored, ignored_) \
 void \
-eye_##dtype ( \
+eye_##dtype( \
     size_t rows, \
     size_t columns, \
     long long k, \
