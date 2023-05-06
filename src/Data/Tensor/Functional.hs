@@ -427,26 +427,44 @@ infixl 7 //
 
 infixl 7 %
 
+makeContiguousInLastDim :: HasDtype t => Tensor t -> (CInt, Tensor t)
+makeContiguousInLastDim x@(Tensor shape stride offset dat) =
+  case fromIntegral $ sizeOfElem dat of {elemSize ->
+  case V.length shape of {nDims ->
+    if V.last stride /= fromIntegral elemSize &&
+        stride V.! (nDims - 2) /= fromIntegral elemSize then
+      (fromBool False, copy x)
+    else if V.last stride /= fromIntegral elemSize then
+      (fromBool True,
+      Tensor (swapElementsAt shape (nDims - 2, nDims - 1))
+              (swapElementsAt stride (nDims - 2, nDims - 1))
+              offset dat)
+    else (fromBool False, x)
+  }}
+
 matmul :: (HasDtype t, Floating t) => Tensor t -> Tensor t -> Tensor t
 matmul x1@(Tensor shape1 stride1 offset1 dat1)
-       (Tensor shape2 stride2 offset2 dat2) =
+       x2@(Tensor shape2 stride2 offset2 dat2) =
   case (V.length shape1, V.length shape2) of {(nDims1, nDims2) ->
   case elemIndex 0 [nDims1, nDims2] of
     Nothing ->
+      case sizeOfElem dat1 of {elemSize ->
       case (
         if nDims1 == 1 then
           ([-2],
+          2,
           V.cons 1 shape1,
-          V.cons (fromIntegral $ V.head shape1 * sizeOfElem dat1) stride1)
-        else ([], shape1, stride1)
-      ) of {(indicesToRemove, shape1, stride1) ->
+          V.cons (fromIntegral $ V.head shape1 * elemSize) stride1)
+        else ([], nDims1, shape1, stride1)
+      ) of {(indicesToRemove, nDims1, shape1, stride1) ->
       case (
         if nDims2 == 1 then
           (-1 : indicesToRemove,
+          2,
           V.snoc shape2 1,
-          V.snoc stride2 (fromIntegral $ sizeOfElem dat2))
-        else (indicesToRemove, shape2, stride2)
-      ) of {(indicesToRemove, shape2, stride2) ->
+          V.snoc stride2 (fromIntegral elemSize))
+        else (indicesToRemove, nDims2, shape2, stride2)
+      ) of {(indicesToRemove, nDims2, shape2, stride2) ->
       case (shape1 V.! (nDims1 - 2), V.last shape2, V.last shape1) of {(m, n, k) ->
         if shape2 V.! (nDims2 - 2) == k then
           case (
@@ -458,15 +476,20 @@ matmul x1@(Tensor shape1 stride1 offset1 dat1)
             if verifyBroadcastable [batchShape1, batchShape2] then
               case broadcastShapesStrides [batchShape1, batchShape2] [batchStride1, batchStride2]
               of {(batchShape, [batchStride1, batchStride2]) ->
+              case makeContiguousInLastDim x1 of {(trans1, Tensor shape1 stride1 offset1 dat1) ->
+              case makeContiguousInLastDim x2 of {(trans2, Tensor shape2 stride2 offset2 dat2) ->
               case (
                 batchShape V.++ V.fromList [m, n],
                 batchStride1 V.++ V.drop (nDims1 - 2) stride1,
                 batchStride2 V.++ V.drop (nDims2 - 2) stride2
-              ) of {(newShape, stride1, stride2) ->
+              ) of {(shape, stride1, stride2) ->
+                case V.ifilter (
+                  \ axis dim -> axis - V.length shape `notElem` indicesToRemove
+                ) shape of {newShape ->
                 case tensorDtype x1 of {dtype ->
                 case V.unsafeCast dat1 of {data1CChar ->
                 case V.unsafeCast dat2 of {data2CChar ->
-                  Tensor newShape (computeStride (sizeOfElem dat1) newShape) 0
+                  Tensor newShape (computeStride elemSize newShape) 0
                   $ unsafePerformIO
                   $ do
                     mutableData <- VM.new $ fromIntegral $ totalElems_ newShape
@@ -476,14 +499,14 @@ matmul x1@(Tensor shape1 stride1 offset1 dat1)
                           $(size_t m),
                           $(size_t n),
                           $(size_t k),
-                          $vec-len:newShape,
-                          $vec-ptr:(size_t *newShape),
+                          $vec-len:shape,
+                          $vec-ptr:(size_t *shape),
                           $(int dtype),
-                          CblasNoTrans,
+                          $(int trans1) ? CblasTrans : CblasNoTrans,
                           $vec-ptr:(long long *stride1),
                           $(size_t offset1),
                           $vec-ptr:(char *data1CChar),
-                          CblasNoTrans,
+                          $(int trans2) ? CblasTrans : CblasNoTrans,
                           $vec-ptr:(long long *stride2),
                           $(size_t offset2),
                           $vec-ptr:(char *data2CChar),
@@ -492,8 +515,8 @@ matmul x1@(Tensor shape1 stride1 offset1 dat1)
                       } |]
                     }
                     V.unsafeFreeze mutableData
-                }}}
-              }}
+                }}}}
+              }}}}
             else
               error
               $ "matmul: batch shapes "
@@ -511,7 +534,7 @@ matmul x1@(Tensor shape1 stride1 offset1 dat1)
           ++ " is different from "
           ++ show k
           ++ ")"
-      }}}
+      }}}}
     Just i ->
       error
       $ "matmul: input operand "
@@ -932,8 +955,8 @@ swapDims x@(Tensor shape stride offset dat) (dim1, dim2) =
     if 0 <= normDim1 && normDim1 < nDims &&
        0 <= normDim2 && normDim2 < nDims then
       Tensor
-      (swapElementsAt shape normDim1 normDim2)
-      (swapElementsAt stride normDim1 normDim2)
+      (swapElementsAt shape (normDim1, normDim2))
+      (swapElementsAt stride (normDim1, normDim2))
       offset dat
     else
       error

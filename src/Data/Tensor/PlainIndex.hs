@@ -234,9 +234,9 @@ normalizeNewDim nDims dim =
 
 -- | Swap index dims.
 --
---   Signature: @index -> dim1 -> dim2 -> swappedIndex@
-swapElementsAt :: (Storable t) => Vector t -> Int -> Int -> Vector t
-swapElementsAt index dim1 dim2 =
+--   Signature: @index -> (dim1, dim2) -> swappedIndex@
+swapElementsAt :: (Storable t) => Vector t -> (Int, Int) -> Vector t
+swapElementsAt index (dim1, dim2) =
   index // [(dim1, index ! dim2), (dim2, index ! dim1)]
 
 -- | Sort index according new dim order.
