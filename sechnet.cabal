@@ -39,24 +39,24 @@ executable sechnet
 
 library
     exposed-modules:
-        Data.Tensor.PlainIndex,
-        Data.Tensor.Size,
-        Data.Tensor.ListUtils,
-        Data.Tensor.Definitions,
-        Data.Tensor.Functional,
-        Data.Tensor.Instances,
-        Data.Tensor.Boolean,
-        Data.Tensor.AdvancedIndex,
-        Data.Tensor
-        Data.Layers.Layer,
-        Handle.LayerHandle,
-        Data.Dataset.Dataset,
-        Data.Dataset.Dataloader,
-        NN.NNDesigner,
-        NN.Autograd,
-        NN.Optimizer,
-        Handle.OptimizerHandle,
-        Handle.TrainerHandle
+        Data.Tensor.PlainIndex
+        , Data.Tensor.Size
+        , Data.Tensor.ListUtils
+        , Data.Tensor.Definitions
+        , Data.Tensor.Functional
+        , Data.Tensor.Instances
+        , Data.Tensor.Boolean
+        , Data.Tensor.AdvancedIndex
+        , Data.Tensor
+        , Data.Layers.Layer
+        , Handle.LayerHandle
+        , Data.Dataset.Dataset
+        , Data.Dataset.Dataloader
+        , NN.NNDesigner
+        , NN.Autograd
+        , NN.Optimizer
+        , Handle.OptimizerHandle
+        , Handle.TrainerHandle
     build-depends:
       base ^>= 4.16
       , free
@@ -84,7 +84,7 @@ library
       , src/Data/Tensor/cbits/convert.c
       , src/Data/Tensor/cbits/matmul.c
     cc-options: -O3 -march=native -mno-vzeroupper
-    extra-libraries: /usr/lib/x86_64-linux-gnu/libopenblas.so
+    -- extra-libraries: /usr/lib/x86_64-linux-gnu/libopenblas.so
     ghc-options: -funbox-strict-fields
 
 test-suite sechnet-test
