@@ -325,7 +325,9 @@ slice x@(Tensor shape stride offset dat) indexers =
   case parseTensorIndexer shape indexers of {(tensorIndexers, indexers) ->
   case slice x indexers of {x@(Tensor shape stride offset dat) ->
   case partitionEithers tensorIndexers of {(tensorIndexers, residualDims) ->
-    if not $ null tensorIndexers then
+    if null tensorIndexers then
+      x
+    else
       case map fst tensorIndexers of {tensorDims ->
       -- If tensor indexers are separated by None, Ell or Slice,
       -- indexed dims come first in the resulting tensor.
@@ -345,8 +347,6 @@ slice x@(Tensor shape stride offset dat) indexers =
         indexShape,
         V.drop (fromIntegral (startIndexDim + nIndices)) shape
       ] of {newShape ->
-      -- unsafePerformIO
-      -- $ print (startIndexDim, nIndices, indexNDims, indexShape, newShape) >> return (
       case sizeOfElem dat of {elemSize ->
       case V.unsafeCast dat of {dataCChar ->
           Tensor newShape (computeStride elemSize newShape) 0
@@ -386,7 +386,6 @@ slice x@(Tensor shape stride offset dat) indexers =
                 }
                 V.unsafeFreeze mutableData
       }}}}}}}}}
-    else x
   }}}}}}
     where
       findGap [] = False

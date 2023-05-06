@@ -622,7 +622,7 @@ sumAlongDims x@(Tensor shape stride offset dat) dims keepDims =
     if all (\ dim -> 0 <= dim && dim < nDims) normDims then
       if length (nub normDims) == length normDims then
         case filter (not . flip elem normDims) [0 .. nDims - 1] ++ normDims of {dims ->
-        case (sortDims shape dims, sortDims stride dims) of {(shape, stride) ->
+        case (sortDims shape dims, sortDims stride dims) of {(sortedShape, sortedStride) ->
         case fromIntegral $ nDims - length normDims of {startSumDim ->
         case (
           if keepDims then
@@ -632,7 +632,7 @@ sumAlongDims x@(Tensor shape stride offset dat) dims keepDims =
                   1
                 else dim
             ) (V.fromList [0 .. nDims - 1]) shape
-          else V.take (fromIntegral startSumDim) shape
+          else V.take (fromIntegral startSumDim) sortedShape
         ) of {newShape ->
         case tensorDtype x of {dtype ->
         case sizeOfElem dat of {elemSize ->
@@ -646,8 +646,8 @@ sumAlongDims x@(Tensor shape stride offset dat) dims keepDims =
                 sum_along_dims(
                   $(int startSumDim),
                   $vec-len:shape,
-                  $vec-ptr:(size_t *shape),
-                  $vec-ptr:(long long *stride),
+                  $vec-ptr:(size_t *sortedShape),
+                  $vec-ptr:(long long *sortedStride),
                   $(size_t offset),
                   $(int dtype),
                   $(size_t elemSize),

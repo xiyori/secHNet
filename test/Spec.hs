@@ -305,10 +305,7 @@ prop_sum_along_all x =
 
 prop_sum_along_keep_dims_all :: Tensor CFloat -> Bool
 prop_sum_along_keep_dims_all x =
-  unsafePerformIO
-  $ print (sumAlongDims x [0 .. dim x - 1] True) >>
-  print (full (replicate 1 $ dim x) (T.sum x)) >> return (
-  sumAlongDims x [0 .. dim x - 1] True == full (replicate 1 $ dim x) (T.sum x))
+  sumAlongDims x [0 .. dim x - 1] True == full (replicate (dim x) 1) (T.sum x)
 
 prop_copy :: Tensor CFloat -> Bool
 prop_copy x = x `equal` copy x
