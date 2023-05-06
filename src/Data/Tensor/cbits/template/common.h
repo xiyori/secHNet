@@ -63,10 +63,12 @@ macro(float64, name, function##_FLOAT64) \
 \
 FUNC_WRAPPER(FORALL_DTYPES, macro, name)
 
-#define FUNC_MATH(macro, name) \
-macro(float32, name, name##f) \
-macro(float64, name, name) \
+#define FUNC_FLOAT(macro, name, function_float32, function_float64) \
+macro(float32, name, function_float32) \
+macro(float64, name, function_float64) \
 \
 FUNC_WRAPPER(FORALL_FLOAT_DTYPES, macro, name)
+
+#define FUNC_MATH(macro, name) FUNC_FLOAT(macro, name, name##f, name)
 
 #endif

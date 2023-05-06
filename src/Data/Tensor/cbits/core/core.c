@@ -1,7 +1,5 @@
 #include "core.h"
 
-// #include <stdio.h>
-
 
 size_t
 flatten_index(
@@ -182,16 +180,6 @@ tensor_index(
             long long i = *(long long *) index_dat[dim - start_index_dim];
             current_dat_from += stride[dim] * ((i < 0) ? shape[dim] + i : i);
         }
-        // printf(
-        //     "%d %lu %lld %lu %lu %lu %lu\n",
-        //     copy_n_dims,
-        //     shape[0],
-        //     stride[1],
-        //     elem_size,
-        //     last_dim,
-        //     index_numel,
-        //     current_dat_from - dat_from
-        // );
         for (size_t i = 0; i < numel; ++i) {
             copy(
                 copy_n_dims,

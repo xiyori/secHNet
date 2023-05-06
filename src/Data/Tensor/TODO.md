@@ -8,9 +8,9 @@
 - [x] integer division, mod
 - [x] advancedIndex
 - [x] sumAlongDim
-- [ ] matmul
+- [x] matmul
 - [ ] conv
-- [ ] concat, stack
+- [ ] concat, stack, split, indices
 - [ ] assignments
 - [ ] isin
 - [ ] shape and indexing unification ?

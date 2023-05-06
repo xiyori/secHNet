@@ -30,6 +30,7 @@ C.include "cbits/integral.h"
 C.include "cbits/fold.h"
 C.include "cbits/construct.h"
 C.include "cbits/convert.h"
+C.include "cbits/matmul.h"
 
 
 -- Construction
@@ -282,9 +283,11 @@ onesLike (Tensor shape _ _ _) = full_ shape 1
 eye :: forall t. (HasDtype t, Num t) => Int -> Int -> Int -> Tensor t
 eye rows columns diagonalIndex
   | rows >= 0 && columns >= 0 =
-    case (fromIntegral rows,
-        fromIntegral columns,
-        fromIntegral diagonalIndex) of {(rows, columns, diagonalIndex) ->
+    case (
+      fromIntegral rows,
+      fromIntegral columns,
+      fromIntegral diagonalIndex
+    ) of {(rows, columns, diagonalIndex) ->
     case empty :: Tensor t of {sampleTensor ->
     case tensorDtype sampleTensor of {dtype ->
     case V.fromList [rows, columns] of {shape ->
@@ -424,19 +427,103 @@ infixl 7 //
 
 infixl 7 %
 
--- dot :: Num t => Tensor t -> Tensor t -> Tensor t
--- dot (Tensor shape1 dat1) (Tensor shape2 dat2) =
---   Tensor (mergeIndex arrayShape (matrixRows1, matrixCols2))
---   $ liftA2 (*) dat1 dat2
---   where
---     (arrayShape, (matrixRows1, _)) = splitIndex shape1
---     (_, (_, matrixCols2)) = splitIndex shape2
+matmul :: (HasDtype t, Floating t) => Tensor t -> Tensor t -> Tensor t
+matmul x1@(Tensor shape1 stride1 offset1 dat1)
+       (Tensor shape2 stride2 offset2 dat2) =
+  case (V.length shape1, V.length shape2) of {(nDims1, nDims2) ->
+  case elemIndex 0 [nDims1, nDims2] of
+    Nothing ->
+      case (
+        if nDims1 == 1 then
+          ([-2],
+          V.cons 1 shape1,
+          V.cons (fromIntegral $ V.head shape1 * sizeOfElem dat1) stride1)
+        else ([], shape1, stride1)
+      ) of {(indicesToRemove, shape1, stride1) ->
+      case (
+        if nDims2 == 1 then
+          (-1 : indicesToRemove,
+          V.snoc shape2 1,
+          V.snoc stride2 (fromIntegral $ sizeOfElem dat2))
+        else (indicesToRemove, shape2, stride2)
+      ) of {(indicesToRemove, shape2, stride2) ->
+      case (shape1 V.! (nDims1 - 2), V.last shape2, V.last shape1) of {(m, n, k) ->
+        if shape2 V.! (nDims2 - 2) == k then
+          case (
+            V.take (nDims1 - 2) shape1,
+            V.take (nDims2 - 2) shape2,
+            V.take (nDims1 - 2) stride1,
+            V.take (nDims1 - 2) stride2
+          ) of {(batchShape1, batchShape2, batchStride1, batchStride2) ->
+            if verifyBroadcastable [batchShape1, batchShape2] then
+              case broadcastShapesStrides [batchShape1, batchShape2] [batchStride1, batchStride2]
+              of {(batchShape, [batchStride1, batchStride2]) ->
+              case (
+                batchShape V.++ V.fromList [m, n],
+                batchStride1 V.++ V.drop (nDims1 - 2) stride1,
+                batchStride2 V.++ V.drop (nDims2 - 2) stride2
+              ) of {(newShape, stride1, stride2) ->
+                case tensorDtype x1 of {dtype ->
+                case V.unsafeCast dat1 of {data1CChar ->
+                case V.unsafeCast dat2 of {data2CChar ->
+                  Tensor newShape (computeStride (sizeOfElem dat1) newShape) 0
+                  $ unsafePerformIO
+                  $ do
+                    mutableData <- VM.new $ fromIntegral $ totalElems_ newShape
+                    case VM.unsafeCast mutableData of {mutableDataCChar ->
+                      [CU.exp| void {
+                        tensor_matmul(
+                          $(size_t m),
+                          $(size_t n),
+                          $(size_t k),
+                          $vec-len:newShape,
+                          $vec-ptr:(size_t *newShape),
+                          $(int dtype),
+                          CblasNoTrans,
+                          $vec-ptr:(long long *stride1),
+                          $(size_t offset1),
+                          $vec-ptr:(char *data1CChar),
+                          CblasNoTrans,
+                          $vec-ptr:(long long *stride2),
+                          $(size_t offset2),
+                          $vec-ptr:(char *data2CChar),
+                          $vec-ptr:(char *mutableDataCChar)
+                        )
+                      } |]
+                    }
+                    V.unsafeFreeze mutableData
+                }}}
+              }}
+            else
+              error
+              $ "matmul: batch shapes "
+              ++ show shape1
+              ++ " "
+              ++ show shape2
+              ++ " can not be broadcasted"
+          }
+        else
+          error
+          $ "matmul: input operand has a mismatch in dim "
+          ++ show (nDims2 - 2)
+          ++ " (size "
+          ++ show (shape2 V.! (nDims2 - 2))
+          ++ " is different from "
+          ++ show k
+          ++ ")"
+      }}}
+    Just i ->
+      error
+      $ "matmul: input operand "
+      ++ show i
+      ++ " does not have enough dimensions (has 0)"
+  }
 
--- An infix synonym for dot.
--- (@) :: Num t => Tensor t -> Tensor t -> Tensor t
--- (@) = dot
+-- | An infix synonym for @matmul@.
+(@) :: (HasDtype t, Floating t) => Tensor t -> Tensor t -> Tensor t
+(@) = matmul
 
--- infixl 7 @
+infixl 7 @
 
 -- | Perform elementwise operation without cheking
 --   for validity of arguments.
@@ -903,7 +990,7 @@ foldr' f accum x =
 {-# INLINE broadcast #-}
 {-# INLINE (//) #-}
 {-# INLINE (%) #-}
--- {-# INLINE dot #-}
+{-# INLINE matmul #-}
 {-# INLINE unsafeElementwise #-}
 
 {-# INLINE (!) #-}

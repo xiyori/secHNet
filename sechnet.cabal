@@ -36,7 +36,6 @@ executable sechnet
       , random
     hs-source-dirs:   app
     default-language: Haskell2010
-    ghc-options: -funbox-strict-fields -fforce-recomp
 
 library
     exposed-modules:
@@ -83,8 +82,10 @@ library
       , src/Data/Tensor/cbits/boolean.c
       , src/Data/Tensor/cbits/construct.c
       , src/Data/Tensor/cbits/convert.c
-    cc-options: -O3 -mno-vzeroupper
-    ghc-options: -funbox-strict-fields -fforce-recomp
+      , src/Data/Tensor/cbits/matmul.c
+    cc-options: -O3 -march=native -mno-vzeroupper
+    extra-libraries: /usr/lib/x86_64-linux-gnu/libopenblas.so
+    ghc-options: -funbox-strict-fields
 
 test-suite sechnet-test
     type:             exitcode-stdio-1.0
