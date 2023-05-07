@@ -46,6 +46,7 @@ import Data.Tensor (
       mean,
       sumAlongDims,
       sumAlongDim,
+      relu,
       copy,
       astype,
       transpose,
@@ -339,6 +340,9 @@ prop_sum_along_all x =
 prop_sum_along_keep_dims_all :: Tensor CFloat -> Bool
 prop_sum_along_keep_dims_all x =
   sumAlongDims x [0 .. dim x - 1] True == full (replicate (dim x) 1) (T.sum x)
+
+prop_relu :: Tensor CFloat -> Bool
+prop_relu x = relu x `equal` T.map (max 0) x
 
 prop_copy :: Tensor CFloat -> Bool
 prop_copy x = x `equal` copy x

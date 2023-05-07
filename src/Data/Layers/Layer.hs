@@ -7,7 +7,7 @@ module Data.Layers.Layer where
 import Control.Applicative
 import System.Random
 import Data.Tensor (HasDtype, Tensor, HasArange(arange), tensor, zeros, randn,
-                    (@), (!), Indexer (T), (!:), shape, sumAlongDims, sumAlongDim, transpose)
+                    (@), (!), Indexer (T), (!:), shape, sumAlongDims, sumAlongDim, relu, astype, transpose)
 import qualified Data.Tensor as T
 
 import Foreign.C.Types
@@ -142,19 +142,11 @@ makeReLU i = ReLU (zeros [i, 1])
 
 instance (HasDtype t, Ord t, Num t) => Layer (ReLU t) t where
   forward :: ReLU t -> Tensor t -> (ReLU t, Tensor t)
-  forward _ input = (ReLU input, T.map relu input)
-    where
-      relu x
-        | x > 0     = x
-        | otherwise = 0
+  forward _ input = (ReLU input, relu input)
 
   backward :: ReLU t -> Tensor t -> (ReLU t, Tensor t)
   backward relu@(ReLU input) grad_output =
-    (relu, T.elementwise zeroMask grad_output input)
-      where
-        zeroMask x mask
-          | mask > 0  = x
-          | otherwise = 0
+    (relu, grad_output * astype (input T.> 0))
 
   getParams _ = Flat []
   getGrads _ = Flat []

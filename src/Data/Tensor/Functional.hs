@@ -28,6 +28,7 @@ C.context (C.baseCtx <> C.vecCtx)
 C.include "cbits/core/core.h"
 C.include "cbits/integral.h"
 C.include "cbits/fold.h"
+C.include "cbits/ord.h"
 C.include "cbits/construct.h"
 C.include "cbits/convert.h"
 C.include "cbits/matmul.h"
@@ -804,6 +805,31 @@ sumAlongDims x@(Tensor shape stride offset dat) dims keepDims =
 sumAlongDim :: (HasDtype t, Num t) => Tensor t -> Int -> Tensor t
 sumAlongDim x dim = sumAlongDims x [dim] False
 
+-- | ReLU activation function @map (max 0)@.
+relu :: (HasDtype t, Ord t) => Tensor t -> Tensor t
+relu x@(Tensor shape stride offset dat) =
+    case tensorDtype x of {dtype ->
+    case V.unsafeCast dat of {dataCChar ->
+      Tensor shape (computeStride (sizeOfElem dat) shape) 0
+      $ unsafePerformIO
+      $ do
+        mutableData <- VM.new $ fromIntegral $ totalElems_ shape
+        case VM.unsafeCast mutableData of {mutableDataCChar ->
+          [CU.exp| void {
+            tensor_relu(
+              $vec-len:shape,
+              $vec-ptr:(size_t *shape),
+              $vec-ptr:(long long *stride),
+              $(size_t offset),
+              $(int dtype),
+              $vec-ptr:(char *dataCChar),
+              $vec-ptr:(char *mutableDataCChar)
+            )
+          } |]
+        }
+        V.unsafeFreeze mutableData
+    }}
+
 -- | Return a contiguous copy of a tensor.
 copy :: (HasDtype t) => Tensor t -> Tensor t
 copy (Tensor shape stride offset dat) =
@@ -880,7 +906,7 @@ flatten x =
 
 -- | Give a new shape to a tensor without changing its data.
 --
---   No more than one dim is allowed to be (-1), which means
+--   No more than one dim is allowed to be (-1), in which case
 --   it is inferred from the current shape.
 --
 --   Signature: @tensor -> newShape -> tensor@

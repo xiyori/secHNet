@@ -14,13 +14,13 @@ randomSample ds = do
     gen <- liftIO newStdGen
     len <- lift $ DAS.length ds
     let inds = randomRs (0, len - 1) gen
-    forM_ inds $ (\i -> do
+    forM_ inds $ \i -> do
         sample <- lift $ ds DAS.!! i
-        yield sample)
+        yield sample
 
 toBatch :: Monad m => Int -> ConduitT t [t] m ()
 toBatch size = helper []
-    where 
+    where
         helper batch = do
             val <- await
             case val of

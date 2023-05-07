@@ -1,9 +1,6 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ConstrainedClassMethods #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Data.Dataset.Dataset where
 
@@ -19,9 +16,9 @@ class (Monad m) => Dataset s m t | s -> t where
     (!!) :: s -> Int -> m t
     length :: s -> m Int
 
-partitionBS sz = snd . BS.foldr' (\x (s, l@(block : tail)) -> 
-    if s < sz then 
-        (s + 1, (x : block) : tail) 
+partitionBS sz = snd . BS.foldr' (\x (s, l@(block : tail)) ->
+    if s < sz then
+        (s + 1, (x : block) : tail)
     else  (1, [x]:l)
     ) (0, [[]])
 
@@ -34,7 +31,7 @@ batch path = do
     return tens
     where
         byteToDouble :: Word8 -> CFloat
-        byteToDouble = fromIntegral 
+        byteToDouble = fromIntegral
 
 label :: FilePath -> IO [Int]
 label path = do

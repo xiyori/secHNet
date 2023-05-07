@@ -80,6 +80,7 @@ library
       , src/Data/Tensor/cbits/integral.c
       , src/Data/Tensor/cbits/fold.c
       , src/Data/Tensor/cbits/boolean.c
+      , src/Data/Tensor/cbits/ord.c
       , src/Data/Tensor/cbits/construct.c
       , src/Data/Tensor/cbits/convert.c
       , src/Data/Tensor/cbits/matmul.c
