@@ -49,14 +49,14 @@ library
         , Data.Tensor.AdvancedIndex
         , Data.Tensor
         , Data.Layers.Layer
-        -- , Handle.LayerHandle
-        -- , Data.Dataset.Dataset
-        -- , Data.Dataset.Dataloader
-        -- , NN.NNDesigner
-        -- , NN.Autograd
-        -- , NN.Optimizer
-        -- , Handle.OptimizerHandle
-        -- , Handle.TrainerHandle
+        , Handle.LayerHandle
+        , Data.Dataset.Dataset
+        , Data.Dataset.Dataloader
+        , NN.NNDesigner
+        , NN.Autograd
+        , NN.Optimizer
+        , Handle.OptimizerHandle
+        , Handle.TrainerHandle
     build-depends:
       base ^>= 4.16
       , free

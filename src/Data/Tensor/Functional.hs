@@ -431,20 +431,31 @@ makeContiguousInLastDim :: HasDtype t => Tensor t -> (CInt, Tensor t)
 makeContiguousInLastDim x@(Tensor shape stride offset dat) =
   case fromIntegral $ sizeOfElem dat of {elemSize ->
   case V.length shape of {nDims ->
-    if V.last stride /= fromIntegral elemSize &&
-        stride V.! (nDims - 2) /= fromIntegral elemSize then
+    if V.last stride /= elemSize &&
+        stride V.! (nDims - 2) /= elemSize then
       (fromBool False, copy x)
-    else if V.last stride /= fromIntegral elemSize then
-      (fromBool True,
-      Tensor (swapElementsAt shape (nDims - 2, nDims - 1))
-              (swapElementsAt stride (nDims - 2, nDims - 1))
-              offset dat)
-    else (fromBool False, x)
+    else
+      case (
+        if V.last stride /= elemSize then
+          (fromBool True,
+          Tensor (swapElementsAt shape (nDims - 2, nDims - 1))
+                 (swapElementsAt stride (nDims - 2, nDims - 1))
+                 offset dat)
+        else (fromBool False, x)
+      ) of {(trans, x@(Tensor shape stride offset dat)) ->
+        if stride V.! (nDims - 2) < fromIntegral (V.last shape) * elemSize then
+          if shape V.! (nDims - 2) <= 1 then
+            (trans,
+            Tensor shape (stride V.// [(nDims - 2, elemSize)])
+                   offset dat)
+          else (fromBool False, copy x)
+        else (trans, x)
+      }
   }}
 
 matmul :: (HasDtype t, Floating t) => Tensor t -> Tensor t -> Tensor t
-matmul x1@(Tensor shape1 stride1 offset1 dat1)
-       x2@(Tensor shape2 stride2 offset2 dat2) =
+matmul (Tensor shape1 stride1 offset1 dat1)
+       (Tensor shape2 stride2 offset2 dat2) =
   case (V.length shape1, V.length shape2) of {(nDims1, nDims2) ->
   case elemIndex 0 [nDims1, nDims2] of
     Nothing ->
@@ -471,13 +482,17 @@ matmul x1@(Tensor shape1 stride1 offset1 dat1)
             V.take (nDims1 - 2) shape1,
             V.take (nDims2 - 2) shape2,
             V.take (nDims1 - 2) stride1,
-            V.take (nDims1 - 2) stride2
+            V.take (nDims2 - 2) stride2
           ) of {(batchShape1, batchShape2, batchStride1, batchStride2) ->
             if verifyBroadcastable [batchShape1, batchShape2] then
               case broadcastShapesStrides [batchShape1, batchShape2] [batchStride1, batchStride2]
               of {(batchShape, [batchStride1, batchStride2]) ->
-              case makeContiguousInLastDim x1 of {(trans1, Tensor shape1 stride1 offset1 dat1) ->
-              case makeContiguousInLastDim x2 of {(trans2, Tensor shape2 stride2 offset2 dat2) ->
+              -- unsafePerformIO $ print (nDims1, shape1, stride1, nDims2, shape2, stride2) >> return (
+              case makeContiguousInLastDim (Tensor shape1 stride1 offset1 dat1)
+              of {(trans1, x1@(Tensor shape1 stride1 offset1 dat1)) ->
+              case makeContiguousInLastDim (Tensor shape2 stride2 offset2 dat2)
+              of {(trans2, x2@(Tensor shape2 stride2 offset2 dat2)) ->
+              -- unsafePerformIO $ print (nDims1, shape1, stride1, nDims2, shape2, stride2) >> return (
               case (
                 batchShape V.++ V.fromList [m, n],
                 batchStride1 V.++ V.drop (nDims1 - 2) stride1,

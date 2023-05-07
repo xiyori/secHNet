@@ -35,6 +35,7 @@ import Data.Tensor (
       broadcastN,
       (//),
       (%),
+      (@),
       elementwise,
       (!),
       (!:),
@@ -126,7 +127,7 @@ prop_arange_empty_neg = (arange 0 1 (-1) :: Tensor CFloat) `equal` T.empty
 prop_arange_int :: Index -> Bool
 prop_arange_int shape
   | totalElems shape /= 0 =
-    flatten (tensor_ (V.map fromIntegral $ V.fromList shape) $ fromIntegral) `equal`
+    flatten (tensor_ (V.map fromIntegral $ V.fromList shape) fromIntegral) `equal`
     arange (0 :: CLLong) (fromIntegral $ totalElems shape) 1
   | otherwise =
     True
@@ -195,10 +196,53 @@ prop_mod = do
 
 prop_mod_float :: Gen Bool
 prop_mod_float = do
-  (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
+  (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CDouble, Tensor CDouble)
   case broadcast x1 x2 of {(x1b, x2b) ->
     return $ x1 % x2 `equal` elementwise (\ a b -> a - b * fromIntegral (floor $ a / b)) x1 x2
   }
+
+prop_matmul_id :: Bool
+prop_matmul_id = x @ x == x
+  where
+    x = eye 3 3 0 :: Tensor CFloat
+
+prop_matmul_single :: Bool
+prop_matmul_single = x @ x == 1
+  where
+    x = single 1 :: Tensor CFloat
+
+prop_matmul_dot :: Bool
+prop_matmul_dot = x @ x == 3
+  where
+    x = ones [3] :: Tensor CFloat
+
+prop_matmul_matvec :: Bool
+prop_matmul_matvec = a @ x == 3 * x
+  where
+    a = ones [3, 3] :: Tensor CFloat
+    x = ones [3] :: Tensor CFloat
+
+prop_matmul_unit_id :: Bool
+prop_matmul_unit_id = unit_x @ eye last_dim last_dim 0 == unit_x
+  where
+    last_dim = last $ shape unit_x
+
+prop_matmul_unit_matvec :: Bool
+prop_matmul_unit_matvec = unit_x @ ones [last_dim] ==
+  fromList2 [[ 21,  70, 119],
+             [168, 217, 266]]
+  where
+    last_dim = last $ shape unit_x
+
+prop_matmul_unit :: Bool
+prop_matmul_unit = unit_x @ transpose unit_x ==
+  fromList3 [[[   91,   238,   385],
+              [  238,   728,  1218],
+              [  385,  1218,  2051]],
+
+             [[ 4060,  5236,  6412],
+              [ 5236,  6755,  8274],
+              [ 6412,  8274, 10136]]]
 
 prop_getelem :: Index -> Bool
 prop_getelem shape
@@ -284,11 +328,8 @@ prop_sum_along_single_neg = sumAlongDim (single 1 :: Tensor CFloat) (-1) == 1
 
 prop_sum_along_keep_dims :: Tensor CFloat -> Bool
 prop_sum_along_keep_dims x =
-  unsafePerformIO
-  $ print (sumAlongDims xI [0] True) >> print
-  (tensor (1 : tail (shape xI)) (\ index -> T.sum $ xI !: (A : map I (tail index)))) >> return (
   sumAlongDims xI [0] True ==
-  tensor (1 : tail (shape xI)) (\ index -> T.sum $ xI !: (A : map I (tail index))))
+  tensor (1 : tail (shape xI)) (\ index -> T.sum $ xI !: (A : map I (tail index)))
   where
     xI = insertDim x (-1)
 
