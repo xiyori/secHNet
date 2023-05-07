@@ -176,30 +176,22 @@ prop_elementwise_commutative = do
 prop_int_div :: Gen Bool  -- Fails with arithmetic overflow for *_MIN or *_MAX ?
 prop_int_div = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CChar, Tensor CChar)
-  case broadcast x1 x2 of {(x1b, x2b) ->
-    return $ x1 // x2 `equal` elementwise div x1 x2
-  }
+  return $ x1 // x2 `equal` elementwise div x1 x2
 
 prop_int_div_float :: Gen Bool
 prop_int_div_float = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
-  case broadcast x1 x2 of {(x1b, x2b) ->
-    return $ x1 // x2 `equal` elementwise (\ a b -> fromIntegral $ floor $ a / b) x1 x2
-  }
+  return $ x1 // x2 `equal` elementwise (\ a b -> fromIntegral $ floor $ a / b) x1 x2
 
 prop_mod :: Gen Bool
 prop_mod = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CChar, Tensor CChar)
-  case broadcast x1 x2 of {(x1b, x2b) ->
-    return $ x1 % x2 `equal` elementwise mod x1 x2
-  }
+  return $ x1 % x2 `equal` elementwise mod x1 x2
 
 prop_mod_float :: Gen Bool
 prop_mod_float = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CDouble, Tensor CDouble)
-  case broadcast x1 x2 of {(x1b, x2b) ->
-    return $ x1 % x2 `equal` elementwise (\ a b -> a - b * fromIntegral (floor $ a / b)) x1 x2
-  }
+  return $ x1 % x2 `allClose` elementwise (\ a b -> a - b * fromIntegral (floor $ a / b)) x1 x2
 
 prop_matmul_id :: Bool
 prop_matmul_id = x @ x == x
@@ -486,9 +478,7 @@ prop_tensor_leq x = (x T.<= x) `equal` onesLike x
 prop_tensor_not_greater :: Gen Bool
 prop_tensor_not_greater = do
   (x1, x2) <- arbitraryBroadcastablePair :: Gen (Tensor CFloat, Tensor CFloat)
-  case broadcast x1 x2 of {(x1b, x2b) ->
-    return $ T.not (x1b T.> x2b) `equal` (x1b T.<= x2b)
-  }
+  return $ T.not (x1 T.> x2) `equal` (x1 T.<= x2)
 
 prop_not :: Index -> Bool
 prop_not shape = T.not (zeros shape) `equal` (ones shape :: Tensor CBool)
