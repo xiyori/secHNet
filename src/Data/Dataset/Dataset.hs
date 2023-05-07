@@ -3,14 +3,17 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Data.Dataset.Dataset where
 
 import qualified Data.Tensor as T
 import Data.ByteString as BS
+import GHC.Word (Word8)
 import Control.Monad.IO.Class(MonadIO)
+import Foreign.C.Types
 
-data CIFAR10 = CIFAR10 {images :: [T.Tensor Int], labels :: [Int]}
+data CIFAR10 = CIFAR10 {images :: [T.Tensor CFloat], labels :: [Int]}
 
 class (Monad m) => Dataset s m t | s -> t where
     (!!) :: s -> Int -> m t
@@ -22,15 +25,16 @@ partitionBS sz = snd . BS.foldr' (\x (s, l@(block : tail)) ->
     else  (1, [x]:l)
     ) (0, [[]])
 
-batch :: FilePath -> IO [T.Tensor Int]
+batch :: FilePath -> IO [T.Tensor CFloat]
 batch path = do
     bytes <- BS.readFile path
     let chunks = partitionBS 3073 bytes
-    let vecs = Prelude.map (Prelude.map fromIntegral . Prelude.tail) chunks
-    let mats = Prelude.map (\pic -> T.tensor [3, 32, 32] (\idx -> pic Prelude.!! (convertIdx idx))) vecs
-    return mats
+    let flat = Prelude.map (Prelude.map ((/ 256) . byteToDouble) . Prelude.tail) chunks
+    let tens = Prelude.map ((`T.view` [3, 32, 32]) . T.fromList) flat
+    return tens
     where
-        convertIdx idx = ((idx Prelude.!! 0) - 1) * 1024 + ((idx Prelude.!! 1) - 1) * 32 + (idx Prelude.!! 2) - 1
+        byteToDouble :: Word8 -> CFloat
+        byteToDouble = fromIntegral 
 
 label :: FilePath -> IO [Int]
 label path = do
@@ -48,8 +52,8 @@ cifar = do
         labs <- Prelude.concat <$> mapM (label . ((path <>) . (++ ext)) . show) nums
         return $ CIFAR10 images labs
 
-instance (MonadIO m) => Dataset CIFAR10 m (T.Tensor Int, Int) where
-    (!!) :: MonadIO m => CIFAR10 -> Int -> m (T.Tensor Int, Int)
+instance (MonadIO m) => Dataset CIFAR10 m (T.Tensor CFloat, Int) where
+    (!!) :: MonadIO m => CIFAR10 -> Int -> m (T.Tensor CFloat, Int)
     (!!) cif i = do
         let image = images cif Prelude.!! i
         let label = labels cif Prelude.!! i
