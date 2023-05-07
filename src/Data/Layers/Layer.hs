@@ -176,7 +176,7 @@ instance (HasDtype t, Floating t) => Layer (CrossEntropyLogits t) t where
     -logitsForAnswers + log (sumAlongDim (exp logits) (-1)))
     where
       batch = fromIntegral $ head $ shape logits
-      logitsForAnswers = logits !: [T (arange 1 batch 1), T target]
+      logitsForAnswers = logits !: [T.A, T target]
 
   backward :: CrossEntropyLogits t -> Tensor t -> (CrossEntropyLogits t, Tensor t)
   backward crossEntropy@(CrossEntropyLogits target logits) _ =

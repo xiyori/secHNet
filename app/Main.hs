@@ -45,17 +45,17 @@ train = awaitForever batchStep
             let batchFeat = T.tensor [length flatFeat, 1024] (\(h: t) -> (flatFeat Prelude.!! h) T.! t) -- slow, need faster concat
             let batchLbl = fromList labels
 
-            liftIO $ print labels
-
             zeroGrad
             
             let mapping = HM.fromList [("input", batchFeat)]
             outputs <- forward mapping
-            
+
             let lossfunc = makeCrossEntropyLogits
             let lossfunc1 = L.setCrossEntropyTarget lossfunc batchLbl
-            let (lossfunc2, loss) = L.forward lossfunc outputs 
-            liftIO $ print loss
+            let (lossfunc2, loss) = L.forward lossfunc1 outputs 
+
+            liftIO $ print $ T.mean loss
+
             let (_, grads) = L.backward lossfunc2 (T.scalar 1)
             backward grads
 

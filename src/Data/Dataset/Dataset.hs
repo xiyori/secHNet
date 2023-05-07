@@ -58,4 +58,4 @@ instance (MonadIO m) => Dataset CIFAR10 m (T.Tensor CFloat, CLLong) where
         return (image, label)
 
     length :: MonadIO m => CIFAR10 -> m Int
-    length cif = return $ Prelude.length $ images cif
+    length cif = return 2048
