@@ -499,40 +499,39 @@ matmul (Tensor shape1 stride1 offset1 dat1)
                 batchStride1 V.++ V.drop (nDims1 - 2) stride1,
                 batchStride2 V.++ V.drop (nDims2 - 2) stride2
               ) of {(shape, stride1, stride2) ->
-                case V.ifilter (
-                  \ axis dim -> axis - V.length shape `notElem` indicesToRemove
-                ) shape of {newShape ->
-                case tensorDtype x1 of {dtype ->
-                case V.unsafeCast dat1 of {data1CChar ->
-                case V.unsafeCast dat2 of {data2CChar ->
-                  Tensor newShape (computeStride elemSize newShape) 0
-                  $ unsafePerformIO
-                  $ do
-                    mutableData <- VM.new $ fromIntegral $ totalElems_ newShape
-                    case VM.unsafeCast mutableData of {mutableDataCChar ->
-                      [CU.exp| void {
-                        tensor_matmul(
-                          $(size_t m),
-                          $(size_t n),
-                          $(size_t k),
-                          $vec-len:shape,
-                          $vec-ptr:(size_t *shape),
-                          $(int dtype),
-                          $(int trans1) ? CblasTrans : CblasNoTrans,
-                          $vec-ptr:(long long *stride1),
-                          $(size_t offset1),
-                          $vec-ptr:(char *data1CChar),
-                          $(int trans2) ? CblasTrans : CblasNoTrans,
-                          $vec-ptr:(long long *stride2),
-                          $(size_t offset2),
-                          $vec-ptr:(char *data2CChar),
-                          $vec-ptr:(char *mutableDataCChar)
-                        )
-                      } |]
-                    }
-                    V.unsafeFreeze mutableData
-                }}}}
-              }}}}
+              case V.ifilter (
+                \ axis dim -> axis - V.length shape `notElem` indicesToRemove
+              ) shape of {newShape ->
+              case tensorDtype x1 of {dtype ->
+              case V.unsafeCast dat1 of {data1CChar ->
+              case V.unsafeCast dat2 of {data2CChar ->
+                Tensor newShape (computeStride elemSize newShape) 0
+                $ unsafePerformIO
+                $ do
+                  mutableData <- VM.new $ fromIntegral $ totalElems_ newShape
+                  case VM.unsafeCast mutableData of {mutableDataCChar ->
+                    [CU.exp| void {
+                      tensor_matmul(
+                        $(size_t m),
+                        $(size_t n),
+                        $(size_t k),
+                        $vec-len:shape,
+                        $vec-ptr:(size_t *shape),
+                        $(int dtype),
+                        $(int trans1) ? CblasTrans : CblasNoTrans,
+                        $vec-ptr:(long long *stride1),
+                        $(size_t offset1),
+                        $vec-ptr:(char *data1CChar),
+                        $(int trans2) ? CblasTrans : CblasNoTrans,
+                        $vec-ptr:(long long *stride2),
+                        $(size_t offset2),
+                        $vec-ptr:(char *data2CChar),
+                        $vec-ptr:(char *mutableDataCChar)
+                      )
+                    } |]
+                  }
+                  V.unsafeFreeze mutableData
+              }}}}}}}}
             else
               error
               $ "matmul: batch shapes "
@@ -832,12 +831,25 @@ relu x@(Tensor shape stride offset dat) =
 
 -- | Return a contiguous copy of a tensor.
 copy :: (HasDtype t) => Tensor t -> Tensor t
-copy (Tensor shape stride offset dat) =
+copy x@(Tensor shape stride offset dat) =
   case sizeOfElem dat of {elemSize ->
   case V.unsafeCast dat of {dataCChar ->
   case computeStride elemSize shape of {contiguousStride ->
+    -- If all tensor elements point to the same value
+    if V.and $ V.zipWith (
+      \ dim stride -> dim == 1 || stride == 0
+    ) shape stride then
+      Tensor shape contiguousStride 0
+      $ V.replicate (fromIntegral $ totalElems_ shape)
+      $ unsafeDupablePerformIO
+      $ V.unsafeWith dataCChar
+      $ \ dataCCharPtr ->
+        peek
+        $ castPtr
+        $ advancePtr dataCCharPtr
+        $ fromIntegral offset
     -- If tensor is not contiguous, deep copy
-    if contiguousStride /= stride then
+    else if contiguousStride /= stride then
       Tensor shape contiguousStride 0
       $ unsafePerformIO
       $ do
