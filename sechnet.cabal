@@ -29,7 +29,6 @@ executable sechnet
       , containers
       , transformers
       , hashmap
-      , matrix
       , conduit
       , mtl
       , vector
@@ -60,7 +59,6 @@ library
     build-depends:
       base ^>= 4.16
       , free
-      , matrix ^>= 0.3.6.1
       , conduit
       , mtl ^>= 2.3.1
       , transformers
@@ -70,6 +68,7 @@ library
       , random
       , normaldistribution
       , inline-c
+      , array ^>= 0.5.4.0
     hs-source-dirs:   src
     default-language: Haskell2010
     C-sources:
@@ -80,7 +79,6 @@ library
       , src/Data/Tensor/cbits/integral.c
       , src/Data/Tensor/cbits/fold.c
       , src/Data/Tensor/cbits/boolean.c
-      , src/Data/Tensor/cbits/ord.c
       , src/Data/Tensor/cbits/construct.c
       , src/Data/Tensor/cbits/convert.c
       , src/Data/Tensor/cbits/matmul.c

@@ -57,7 +57,7 @@ data Conv2d t = Conv2d {
 -- | In channels -> out channels -> kernel_size -> stride -> padding ->
 -- | random gen
 makeConv2d :: (RandomGen g) =>
-  Int -> Int -> Int -> Int -> Int -> g -> Conv2d CDouble
+  Int -> Int -> Int -> Int -> Int -> g -> Conv2d CFloat
 makeConv2d inChannels outChannels kernel stride padding gen =
   Conv2d (weight * std) (zeros shape)
     (bias * std) (zeros [outChannels]) 0
@@ -97,7 +97,7 @@ data Linear t = Linear {
 }
 
 -- | In channels -> out channels -> random gen
-makeLinear :: (RandomGen g) => Int -> Int -> g -> Linear CDouble
+makeLinear :: (RandomGen g) => Int -> Int -> g -> Linear CFloat
 makeLinear inChannels outChannels gen =
   Linear (weight * std) (zeros shape)
     (bias * std) (zeros [outChannels]) 0
@@ -137,7 +137,7 @@ newtype ReLU t = ReLU {
   reluInput :: Tensor t
 }
 
-makeReLU :: Int -> ReLU CDouble
+makeReLU :: Int -> ReLU CFloat
 makeReLU i = ReLU (zeros [i, 1])
 
 instance (HasDtype t, Ord t, Num t) => Layer (ReLU t) t where
@@ -166,7 +166,7 @@ data CrossEntropyLogits t = CrossEntropyLogits {
   сrossEntropyInput :: Tensor t
 }
 
-makeCrossEntropyLogits :: CrossEntropyLogits CDouble
+makeCrossEntropyLogits :: CrossEntropyLogits CFloat
 makeCrossEntropyLogits = CrossEntropyLogits 0 0
 
 instance (HasDtype t, Floating t) => Layer (CrossEntropyLogits t) t where

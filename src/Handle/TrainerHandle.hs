@@ -15,9 +15,10 @@ import Control.Monad.Reader.Class(MonadReader, asks)
 import NN.Autograd as AG
 import Data.HashMap (Map)
 import qualified Data.Layers.Layer as L
+import Foreign.C.Types
 
 data TrainerHandle = TrainerHandle {
-    getModel :: NN.NeuralNetwork Double,
+    getModel :: NN.NeuralNetwork CFloat,
     getMomentumHandle :: MomentumHandle Params
 }
 
@@ -30,7 +31,7 @@ instance HasTrainer TrainerHandle where
 instance HasMomentum TrainerHandle Params where
     momentum = getMomentumHandle . trainer
 
-zeroLike :: Params (Tensor Double) -> Params (Tensor Double)
+zeroLike :: Params (Tensor CFloat) -> Params (Tensor CFloat)
 zeroLike (Flat f) = Flat $ map (\m -> zeros (shape m)) f
 zeroLike (Nested f) = Nested $ map zeroLike f
 
@@ -55,18 +56,18 @@ optimize = do
     liftIO $ writeIORef (getMomentum optHandle) newOpt
     liftIO $ writeIORef (getParams optHandle) newOptParams
 
-forward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Map String (Tensor Double) -> m (Tensor Double)
+forward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Map String (Tensor CFloat) -> m (Tensor CFloat)
 forward inp = do
     model <- asks (getModel . trainer)
     AG.forward model inp
 
-backward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Tensor Double -> m (Map String (Maybe(Tensor Double)))
+backward :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => Tensor CFloat -> m (Map String (Maybe(Tensor CFloat)))
 backward inp = do
     model <- asks (getModel . trainer)
     AG.backward model inp
 
 
-newTrainerHandle :: (Monad m, MonadIO m) => NN.NeuralNetwork Double -> Momentum -> m TrainerHandle
+newTrainerHandle :: (Monad m, MonadIO m) => NN.NeuralNetwork CFloat -> Momentum -> m TrainerHandle
 newTrainerHandle nn m = do
     mh <- liftIO $ newIORef m
     params <- NN.getParams nn

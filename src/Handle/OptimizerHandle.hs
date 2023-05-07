@@ -10,11 +10,12 @@ import Data.Layers.Layer (Params)
 import NN.Optimizer(Optimizer, Momentum (Momentum))
 import Data.IORef(IORef, newIORef)
 import Control.Monad.IO.Class(MonadIO, liftIO)
+import Foreign.C.Types
 
 
 data MomentumHandle f = MomentumHandle { 
     getMomentum :: IORef Momentum, 
-    getParams :: IORef (f (Tensor Double))
+    getParams :: IORef (f (Tensor CFloat))
 }
 
 class HasMomentum m f | m -> f where

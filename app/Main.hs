@@ -2,12 +2,12 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Main where
-import Data.Tensor(Tensor, tensor, getElem, flatten, sumAlongDim, eye)
+import Data.Tensor as T
 import NN.NNDesigner(MonadNNDesigner, newNode, newLayer, Node((:+:), Input), compileNN)
 import Control.Monad.IO.Class(MonadIO, liftIO)
 import Data.Layers.Layer(makeLinear, makeReLU, makeCrossEntropyLogits)
 import qualified Data.Layers.Layer as L
-import Data.HashMap (fromList)
+import qualified Data.HashMap as HM
 import qualified Data.Dataset.Dataset as DS
 import Data.Dataset.Dataloader
 import Handle.TrainerHandle
@@ -19,10 +19,10 @@ import Control.Monad (forever, forM_)
 import NN.Optimizer(Momentum(Momentum))
 import Data.Void(Void)
 import System.Random(newStdGen)
-import Data.Index (indexRange0)
+import Foreign.C (CFloat, CLLong)
 
 
-mlp :: (MonadNNDesigner m Double, MonadIO m) => m (String, Int)
+mlp :: (MonadNNDesigner m CFloat, MonadIO m) => m (String, Int)
 mlp = do
     rand <- liftIO newStdGen
     inp1 <- newNode $ Input "input"
@@ -34,33 +34,29 @@ mlp = do
     pure ("output", lin3)
 
 
-flattenAndToDouble :: Tensor Int -> Tensor Double
-flattenAndToDouble m = 
-    let dbl = fmap fromIntegral m in flatten $ sumAlongDim dbl 0
-
-train :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => ConduitT [(Tensor Int, Int)] Void m ()
+train :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => ConduitT [(Tensor CFloat, CLLong)] Void m ()
 train = awaitForever batchStep
     where
-        batchStep :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => [(Tensor Int, Int)] -> m()
+        batchStep :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => [(Tensor CFloat, CLLong)] -> m()
         batchStep batch = do
             liftIO $ putStrLn "Batch arrived"
             let (feat, labels) = unzip batch
-            let dFeat = map flattenAndToDouble feat
-            let featT = tensor [length dFeat, 1024] (\idx -> getElem (dFeat !! (head idx)) (tail idx))
-            let labelT = tensor [length labels] (\idx -> labels !! (head idx))
+            let flatFeat = Prelude.map ((`T.view` [1024]) . (`T.sumAlongDim` 0)) feat 
+            let batchFeat = T.tensor [length flatFeat, 1024] (\(h: t) -> (flatFeat Prelude.!! h) T.! t) -- slow, need faster concat
+            let batchLbl = fromList labels
 
-            liftIO $ print labelT
+            liftIO $ print labels
 
             zeroGrad
             
-            let mapping = fromList [("input", featT)]
+            let mapping = HM.fromList [("input", batchFeat)]
             outputs <- forward mapping
             
             let lossfunc = makeCrossEntropyLogits
-            let lossfunc1 = L.setCrossEntropyTarget lossfunc labelT
+            let lossfunc1 = L.setCrossEntropyTarget lossfunc batchLbl
             let (lossfunc2, loss) = L.forward lossfunc outputs 
             liftIO $ print loss
-            let (_, grads) = L.backward lossfunc2 (pure 1)
+            let (_, grads) = L.backward lossfunc2 (T.scalar 1)
             backward grads
 
             optimize
