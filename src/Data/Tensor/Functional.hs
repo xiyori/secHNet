@@ -882,27 +882,31 @@ astype x@(Tensor shape stride offset dat) =
   case empty :: Tensor b of {sampleTensor ->
   case tensorDtype sampleTensor of {dtype_to ->
   case tensorDtype x of {dtype_from ->
-  case V.unsafeCast dat of {dataCChar ->
-    Tensor shape (computeStride (sizeOfElem dat) shape) 0
-    $ unsafePerformIO
-    $ do
-      mutableData <- VM.new $ fromIntegral $ totalElems_ shape
-      case VM.unsafeCast mutableData of {mutableDataCChar ->
-        [CU.exp| void {
-          tensor_astype(
-            $vec-len:shape,
-            $vec-ptr:(size_t *shape),
-            $vec-ptr:(long long *stride),
-            $(size_t offset),
-            $(int dtype_from),
-            $vec-ptr:(char *dataCChar),
-            $(int dtype_to),
-            $vec-ptr:(char *mutableDataCChar)
-          )
-        } |]
+    if dtype_from == dtype_to then
+      Tensor shape stride offset $ V.unsafeCast dat
+    else
+      case V.unsafeCast dat of {dataCChar ->
+        Tensor shape (computeStride (sizeOfElem $ tensorData sampleTensor) shape) 0
+        $ unsafePerformIO
+        $ do
+          mutableData <- VM.new $ fromIntegral $ totalElems_ shape
+          case VM.unsafeCast mutableData of {mutableDataCChar ->
+            [CU.exp| void {
+              tensor_astype(
+                $vec-len:shape,
+                $vec-ptr:(size_t *shape),
+                $vec-ptr:(long long *stride),
+                $(size_t offset),
+                $(int dtype_from),
+                $vec-ptr:(char *dataCChar),
+                $(int dtype_to),
+                $vec-ptr:(char *mutableDataCChar)
+              )
+            } |]
+          }
+          V.unsafeFreeze mutableData
       }
-      V.unsafeFreeze mutableData
-  }}}}
+  }}}
 
 -- | Return a tensor with last 2 axes transposed.
 transpose :: HasDtype t => Tensor t -> Tensor t

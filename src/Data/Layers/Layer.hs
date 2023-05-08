@@ -153,7 +153,7 @@ instance (HasDtype t, Ord t, Num t) => Layer (ReLU t) t where
 
   backward :: ReLU t -> Tensor t -> (ReLU t, Tensor t)
   backward relu@(ReLU input) grad_output =
-    (relu, grad_output * T.map (\x -> if x >= 0 then 1 else 0) input)
+    (relu, grad_output * astype (input T.> 0))
 
   getParams _ = Flat []
   getGrads _ = Flat []
