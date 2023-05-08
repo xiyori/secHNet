@@ -577,9 +577,9 @@ unsafeElementwise :: (HasDtype a, HasDtype b, HasDtype c) =>
 unsafeElementwise f x1 x2 =
   case copy x1 of {(Tensor shape stride offset dat1) ->
   case copy x2 of {(Tensor _ _ _ dat2) ->
-    Tensor shape stride offset
-    $ V.zipWith f dat1 dat2
-  }}
+  case V.zipWith f dat1 dat2 of {dat ->
+    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  }}}
 
 -- | Perform elementwise operation with broadcasting.
 --
@@ -1033,9 +1033,9 @@ swapDims x@(Tensor shape stride offset dat) (dim1, dim2) =
 map :: (HasDtype a, HasDtype b) => (a -> b) -> Tensor a -> Tensor b
 map f x =
   case copy x of {(Tensor shape stride offset dat) ->
-    Tensor shape stride offset
-    $ V.map f dat
-  }
+  case V.map f dat of {dat ->
+    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  }}
 
 -- | Left fold with strict accumulator.
 --

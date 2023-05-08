@@ -368,6 +368,16 @@ prop_astype_uint x = (astype xLL :: Tensor CULLong) `equal` T.map fromIntegral x
   where
     xLL = astype x :: Tensor CLLong
 
+prop_astype_bool :: Tensor CFloat -> Bool
+prop_astype_bool x = (astype xB :: Tensor CFloat) `equal` T.map fromIntegral xB
+  where
+    xB = astype x :: Tensor CBool
+
+prop_astype_double :: Tensor CFloat -> Bool
+prop_astype_double x = (astype xD :: Tensor CFloat) `equal` x
+  where
+    xD = astype x :: Tensor CDouble
+
 prop_transpose_id :: Tensor CFloat -> Bool
 prop_transpose_id x = transpose (transpose x1) `equal` x1
   where
