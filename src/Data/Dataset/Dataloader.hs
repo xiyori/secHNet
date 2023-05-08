@@ -19,14 +19,8 @@ randomSample ds = do
         yield sample
 
 toBatch :: Monad m => Int -> ConduitT t [t] m ()
-toBatch size = helper []
+toBatch size = foldl helper []
     where
-        helper batch = do
-            val <- await
-            case val of
-                Nothing -> return ()
-                Just val' -> do
-                    let batch' = val' : batch
-                    if Prelude.length batch' < size
-                        then helper batch'
-                        else yield batch' >> helper []
+        helper batch val = if Prelude.length batch < size
+            then val : batch
+            else yield (reverse batch) >> helper [val]
