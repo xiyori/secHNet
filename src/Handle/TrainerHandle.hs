@@ -4,7 +4,7 @@
 
 module Handle.TrainerHandle where
 
-import Data.Tensor(Tensor(Tensor), zeros, shape)
+import Data.Tensor(Tensor(Tensor), zerosLike, shape)
 import NN.Optimizer ( Optimizer(step), Momentum)
 import Handle.OptimizerHandle ( HasMomentum(..), MomentumHandle(MomentumHandle, getParams, getMomentum) )
 import qualified NN.NNDesigner as NN
@@ -31,15 +31,15 @@ instance HasTrainer TrainerHandle where
 instance HasMomentum TrainerHandle Params where
     momentum = getMomentumHandle . trainer
 
-zeroLike :: Params (Tensor CFloat) -> Params (Tensor CFloat)
-zeroLike (Flat f) = Flat $ map (\m -> zeros (shape m)) f
-zeroLike (Nested f) = Nested $ map zeroLike f
+paramZerosLike :: Params (Tensor CFloat) -> Params (Tensor CFloat)
+paramZerosLike (Flat f) = Flat $ map zerosLike f
+paramZerosLike (Nested f) = Nested $ map paramZerosLike f
 
 zeroGrad  :: (Monad m, MonadIO m, MonadReader e m, HasTrainer e) => m ()
 zeroGrad = do
     model <- asks (getModel . trainer)
     modelGrads <- NN.getGrads model
-    let newModelGrads = zeroLike modelGrads
+    let newModelGrads = paramZerosLike modelGrads
     NN.setGrads model newModelGrads
             
 
@@ -71,7 +71,7 @@ newTrainerHandle :: (Monad m, MonadIO m) => NN.NeuralNetwork CFloat -> Momentum 
 newTrainerHandle nn m = do
     mh <- liftIO $ newIORef m
     params <- NN.getParams nn
-    let zParams = zeroLike params
+    let zParams = paramZerosLike params
     parh <- liftIO $ newIORef zParams
     pure $ TrainerHandle nn (MomentumHandle mh parh)
     

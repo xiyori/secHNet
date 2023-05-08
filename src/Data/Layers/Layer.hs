@@ -13,6 +13,7 @@ import qualified Data.Tensor as T
 import Foreign.C.Types
 
 data Params t = Flat [t] | Nested [Params t]
+
 instance Functor Params where
   fmap :: (a -> b) -> Params a -> Params b
   fmap f (Flat x) = Flat $ map f x
@@ -26,6 +27,12 @@ instance Applicative Params where
     liftA2 f (Flat x) (Flat y) = Flat $ zipWith f x y
     liftA2 f (Nested x) (Nested y) = Nested $ zipWith (liftA2 f) x y
     liftA2 _ _ _ = error "Incorrect shape"
+
+instance (Show t) => Show (Params t) where
+  show :: Show t => Params t -> String
+  show (Flat x) = show x
+  show (Nested x) = show x
+
 
 class Layer a t | a -> t where
   -- | layer -> input tensor -> (updated layer, output tensor)
@@ -146,7 +153,7 @@ instance (HasDtype t, Ord t, Num t) => Layer (ReLU t) t where
 
   backward :: ReLU t -> Tensor t -> (ReLU t, Tensor t)
   backward relu@(ReLU input) grad_output =
-    (relu, grad_output * astype (input T.> 0))
+    (relu, grad_output * T.map (\x -> if x >= 0 then 1 else 0) input)
 
   getParams _ = Flat []
   getGrads _ = Flat []
@@ -176,7 +183,7 @@ instance (HasDtype t, Floating t) => Layer (CrossEntropyLogits t) t where
     -logitsForAnswers + log (sumAlongDim (exp logits) (-1)))
     where
       batch = fromIntegral $ head $ shape logits
-      logitsForAnswers = logits !: [T.A, T target]
+      logitsForAnswers = logits !: [T (arange 0 batch 1), T target]
 
   backward :: CrossEntropyLogits t -> Tensor t -> (CrossEntropyLogits t, Tensor t)
   backward crossEntropy@(CrossEntropyLogits target logits) _ =

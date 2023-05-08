@@ -8,12 +8,12 @@ import Conduit (MonadIO(liftIO), yieldMany, awaitNonNull)
 import Control.Monad.Trans.Class (lift)
 import Data.Void(Void)
 import Control.Monad(forM_)
-
+import Data.Array.IO as MA
 randomSample :: (Dataset s m t, MonadIO m, Show t) => s -> ConduitT () t m ()
 randomSample ds = do
     gen <- liftIO newStdGen
     len <- lift $ DAS.length ds
-    let inds = randomRs (0, len - 1) gen
+    let inds = take (len - 1) $ randomRs (0, len - 1) gen
     forM_ inds $ \i -> do
         sample <- lift $ ds DAS.!! i
         yield sample
