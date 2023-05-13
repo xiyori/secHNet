@@ -10,7 +10,8 @@
 - [x] sumAlongDim
 - [x] matmul
 - [ ] conv
+- [ ] minimum, maximum
 - [ ] concat, stack, split, indices
-- [ ] assignments
+- [x] assignments
+- [ ] accumulate
 - [ ] isin
-- [ ] shape and indexing unification ?

@@ -7,6 +7,7 @@
 
 #include "dtype.h"
 #include "index.h"
+#include "tensor_index.h"
 
 
 size_t
@@ -62,21 +63,7 @@ validate_tensor_index(
     char *dat,
     long long *out);
 
-void
-tensor_index(
-    int start_index_dim,
-    int n_indices,
-    int index_n_dims,
-    size_t *index_shape,
-    long long **index_strides,
-    size_t *index_offsets,
-    char **index_dat,
-    int n_dims,
-    size_t *shape,
-    long long *stride,
-    size_t offset,
-    size_t elem_size,
-    char *dat_from,
-    char * __restrict dat_to);
+TENSOR_INDEX_PROTO(tensor_index);
+TENSOR_INDEX_PROTO(tensor_index_assign);
 
 #endif

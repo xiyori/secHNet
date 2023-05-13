@@ -15,7 +15,7 @@ import Data.Either
 import Data.Tensor.PlainIndex
 import Data.Tensor.Size
 import Data.Tensor.Definitions
-import Data.Tensor.Functional (insertDims, broadcastN, dim)
+import Data.Tensor.Functional (insertDims, broadcastN, broadcastTo, dim)
 import qualified Data.Tensor.Functional as T
 import Data.Tensor.Instances
 import qualified Data.Tensor.Boolean
@@ -45,10 +45,7 @@ instance Show Indexer where
   show Ell = "..."
 
 instance {-# OVERLAPPING #-} Show Indexers where
-  show indexers = "[" ++ go indexers ++ "]"
-    where
-      go [i] = show i
-      go (i:is) = show i ++ ", " ++ go is
+  show indexers = "[" ++ intercalate ", " (map show indexers) ++ "]"
 
 instance Num Indexer where
   (+) (I a) (I b) = I $ a + b
@@ -151,7 +148,7 @@ parseEllIndexer nDims indexers =
 
 -- | Parse integer tensor indexers and validate their correctness.
 --
---   Signature: @shape -> indexers -> (tensorIndexers, sliceIndexers)@
+--   Signature: @shape -> indexers -> (tensorIndices, indexers)@
 parseTensorIndexer :: Shape -> Indexers -> ([Either (Int, Tensor CLLong) Int], Indexers)
 parseTensorIndexer shape indexers =
   (zipWith (
@@ -203,8 +200,8 @@ parseTensorIndexer shape indexers =
 -- | Parse negative indexer values.
 --
 --   Signature: @i -> dim -> indexer -> step -> normIndexer@
-normalizeIndexer :: Int -> Int -> Indexer -> Int -> Indexer
-normalizeIndexer axis dim (I i) step =
+normalizeSliceIndexer :: Int -> Int -> Indexer -> Int -> Indexer
+normalizeSliceIndexer axis dim (I i) step =
   case normalizeItem dim i of {normI ->
     if 0 <= normI && normI < dim then
       I normI
@@ -217,7 +214,7 @@ normalizeIndexer axis dim (I i) step =
       ++ " with size "
       ++ show dim
   }
-normalizeIndexer axis dim indexer step
+normalizeSliceIndexer axis dim indexer step
   | step > 0 =
     case indexer of
       A -> 0 :. dim :. step
@@ -260,19 +257,19 @@ normalizeIndexer axis dim indexer step
 -- | Parse indexers and validate their correctness.
 --
 --   Signature: @shape -> indexers -> parsedIndexers@
-parseIndexers :: Shape -> Indexers -> Indexers
-parseIndexers shape indexers =
+parseSliceIndexers :: Shape -> Indexers -> Indexers
+parseSliceIndexers shape indexers =
   case V.length shape of {nDims ->
     if length indexers == nDims then
       zipWith3 (
         \ axis dim indexer ->
           case indexer of
             I _ :. step ->
-              normalizeIndexer axis (fromIntegral dim) indexer 1
+              normalizeSliceIndexer axis (fromIntegral dim) indexer 1
             indexer :. step ->
-              normalizeIndexer axis (fromIntegral dim) indexer step
+              normalizeSliceIndexer axis (fromIntegral dim) indexer step
             _ ->
-              normalizeIndexer axis (fromIntegral dim) indexer 1
+              normalizeSliceIndexer axis (fromIntegral dim) indexer 1
       ) [0 .. nDims - 1]
       (V.toList shape) indexers
     else
@@ -284,18 +281,17 @@ parseIndexers shape indexers =
       ++ " were indexed"
   }
 
--- | Perform slicing only.
-slice :: (HasDtype t) => Tensor t -> Indexers -> Tensor t
-slice x@(Tensor shape stride offset dat) indexers =
-  case parseIndexers shape indexers of {indexers ->
-    Tensor (V.fromList $ map (
+-- | Perform slicing.
+slice (shape, stride, offset) indexers =
+  case parseSliceIndexers shape indexers of {indexers ->
+    (V.fromList $ map (
       \ (I start :. end :. step) -> fromIntegral $ (end - start) `div` step
     ) $ filter (
       \case
         I _ -> False
         _   -> True
-    ) indexers)
-    (V.fromList $ map (
+    ) indexers,
+    V.fromList $ map (
       \ (_ :. _ :. step, stride) ->
         stride * fromIntegral step
     ) $ filter (
@@ -303,16 +299,88 @@ slice x@(Tensor shape stride offset dat) indexers =
         case indexer of
           I _ -> False
           _   -> True
-    ) $ zip indexers $ V.toList stride)
-    ((+) offset $ sum $ zipWith (
+    ) $ zip indexers $ V.toList stride,
+    (+) offset $ sum $ zipWith (
       \ indexer stride ->
         case indexer of
           I start :. end :. step ->
             fromIntegral $ fromIntegral start * stride
           I i ->
             fromIntegral $ fromIntegral i * stride
-    ) indexers $ V.toList stride) dat
+    ) indexers $ V.toList stride)
   }
+
+tensorIndex :: (HasDtype t) => Tensor t -> ([(Int, Tensor CLLong)], [Int]) -> Tensor t
+tensorIndex x@(Tensor shape stride offset dat) (tensorIndices, residualDims) =
+  case map fst tensorIndices of {tensorDims ->
+  case broadcastN $ map snd tensorIndices of {tensorIndices ->
+  case fromIntegral $ length tensorIndices of {nIndices ->
+  case fromIntegral $ dim $ head tensorIndices of {indexNDims ->
+  case tensorShape $ head tensorIndices of {indexShape ->
+  -- If tensor indexers are separated by None, Ell or Slice,
+  -- indexed dims come first in the resulting tensor.
+  case (
+    if findGap tensorDims then
+      0
+    else fromIntegral $ head tensorDims
+  ) of {startIndexDim ->
+  case (
+    case tensorDims ++ residualDims of {dims ->
+      (sortDims shape dims, sortDims stride dims)
+    }
+  ) of {(shape, stride) ->
+  -- unsafePerformIO $ print (tensorDims, residualDims, shape, stride) >> return (
+  case V.concat [
+    V.take (fromIntegral startIndexDim) $ V.drop (fromIntegral nIndices) shape,
+    indexShape,
+    V.drop (fromIntegral $ startIndexDim + nIndices) shape
+  ] of {newShape ->
+  case sizeOfElem dat of {elemSize ->
+  case computeStride elemSize newShape of {contiguousStride ->
+  case V.concat [
+    V.take (fromIntegral nIndices) $ V.drop (fromIntegral startIndexDim) contiguousStride,
+    V.take (fromIntegral startIndexDim) contiguousStride,
+    V.drop (fromIntegral $ startIndexDim + nIndices) contiguousStride
+  ] of {newStride ->
+  case V.unsafeCast dat of {dataCChar ->
+      Tensor newShape contiguousStride 0
+      $ unsafePerformIO
+      $ allocaBytes (fromIntegral nIndices * sizeOf (undefined :: Ptr CLLong))
+      $ \ indexStridesPtr ->
+        allocaBytes (fromIntegral nIndices * sizeOf (undefined :: CSize))
+        $ \ indexOffsetsPtr ->
+          allocaBytes (fromIntegral nIndices * sizeOf (undefined :: Ptr CChar))
+          $ \ indexDatPtr -> do
+            zipWithM_ (
+              \ i (Tensor _ stride offset dat) -> do
+                V.unsafeWith stride $ poke $ advancePtr indexStridesPtr i
+                poke (advancePtr indexOffsetsPtr i) offset
+                V.unsafeWith (V.unsafeCast dat) $ poke $ advancePtr indexDatPtr i
+              ) [0 .. fromIntegral nIndices - 1] tensorIndices
+            mutableData <- VM.new $ fromIntegral $ totalElems_ newShape
+            case VM.unsafeCast mutableData of {mutableDataCChar ->
+              [CU.exp| void {
+                tensor_index(
+                  $(int nIndices),
+                  $(int indexNDims),
+                  $vec-ptr:(size_t *indexShape),
+                  $(long long **indexStridesPtr),
+                  $(size_t *indexOffsetsPtr),
+                  $(char **indexDatPtr),
+                  $vec-len:shape,
+                  $vec-ptr:(size_t *shape),
+                  $(size_t elemSize),
+                  $vec-ptr:(long long *stride),
+                  $(size_t offset),
+                  $vec-ptr:(char *dataCChar),
+                  $vec-ptr:(long long *newStride),
+                  0,
+                  $vec-ptr:(char *mutableDataCChar)
+                )
+              } |]
+            }
+            V.unsafeFreeze mutableData
+  }}}}}}}}}}}}
 
 -- | Perform slicing and advanced indexing.
 --
@@ -320,82 +388,117 @@ slice x@(Tensor shape stride offset dat) indexers =
 (!:) :: (HasDtype t) => Tensor t -> Indexers -> Tensor t
 (!:) x@(Tensor shape _ _ _) indexers =
   case parseNoneIndexer (V.length shape) indexers of {(dimsToInsert, indexers) ->
-  case insertDims x dimsToInsert of {x@(Tensor shape _ _ _) ->
+  case insertDims x dimsToInsert of {x@(Tensor shape stride offset dat) ->
   case parseEllIndexer (V.length shape) indexers of {indexers ->
-  case parseTensorIndexer shape indexers of {(tensorIndexers, indexers) ->
-  case slice x indexers of {x@(Tensor shape stride offset dat) ->
-  case partitionEithers tensorIndexers of {(tensorIndexers, residualDims) ->
-    if null tensorIndexers then
+  case parseTensorIndexer shape indexers of {(tensorIndices, indexers) ->
+  case slice (shape, stride, offset) indexers of {(shape, stride, offset) ->
+  case Tensor shape stride offset dat of {x ->
+  case partitionEithers tensorIndices of {(tensorIndices, residualDims) ->
+    if null tensorIndices then
       x
-    else
-      case map fst tensorIndexers of {tensorDims ->
-      -- If tensor indexers are separated by None, Ell or Slice,
-      -- indexed dims come first in the resulting tensor.
-      case (
-        if findGap tensorDims then
-          case tensorDims ++ residualDims of {dims ->
-            (0, sortDims shape dims, sortDims stride dims)
-          }
-        else (fromIntegral $ head tensorDims, shape, stride)
-      ) of {(startIndexDim, shape, stride) ->
-      case broadcastN $ map snd tensorIndexers of {tensorIndexers ->
-      case fromIntegral $ length tensorIndexers of {nIndices ->
-      case fromIntegral $ dim $ head tensorIndexers of {indexNDims ->
-      case tensorShape $ head tensorIndexers of {indexShape ->
-      case V.concat [
-        V.take (fromIntegral startIndexDim) shape,
-        indexShape,
-        V.drop (fromIntegral (startIndexDim + nIndices)) shape
-      ] of {newShape ->
-      case sizeOfElem dat of {elemSize ->
-      case V.unsafeCast dat of {dataCChar ->
-          Tensor newShape (computeStride elemSize newShape) 0
-          $ unsafePerformIO
-          $ allocaBytes (fromIntegral nIndices * sizeOf (undefined :: Ptr CLLong))
-          $ \ indexStridesPtr ->
-            allocaBytes (fromIntegral nIndices * sizeOf (undefined :: CSize))
-            $ \ indexOffsetsPtr ->
-              allocaBytes (fromIntegral nIndices * sizeOf (undefined :: Ptr CChar))
-              $ \ indexDatPtr -> do
-                zipWithM_ (
-                  \ i (Tensor _ stride offset dat) -> do
-                    V.unsafeWith stride $ poke $ advancePtr indexStridesPtr i
-                    poke (advancePtr indexOffsetsPtr i) offset
-                    V.unsafeWith (V.unsafeCast dat) $ poke $ advancePtr indexDatPtr i
-                  ) [0 .. fromIntegral nIndices - 1] tensorIndexers
-                mutableData <- VM.new $ fromIntegral $ totalElems_ newShape
-                case VM.unsafeCast mutableData of {mutableDataCChar ->
-                  [CU.exp| void {
-                    tensor_index(
-                      $(int startIndexDim),
-                      $(int nIndices),
-                      $(int indexNDims),
-                      $vec-ptr:(size_t *indexShape),
-                      $(long long **indexStridesPtr),
-                      $(size_t *indexOffsetsPtr),
-                      $(char **indexDatPtr),
-                      $vec-len:shape,
-                      $vec-ptr:(size_t *shape),
-                      $vec-ptr:(long long *stride),
-                      $(size_t offset),
-                      $(size_t elemSize),
-                      $vec-ptr:(char *dataCChar),
-                      $vec-ptr:(char *mutableDataCChar)
-                    )
-                  } |]
-                }
-                V.unsafeFreeze mutableData
-      }}}}}}}}}
-  }}}}}}
-    where
-      findGap [] = False
-      findGap [_] = False
-      findGap (dim1 : dim2 : dims) = dim2 - dim1 > 1 || findGap (dim2 : dims)
+    else tensorIndex x (tensorIndices, residualDims)
+  }}}}}}}
+
+-- | Assign a subtensor using slicing and advanced indexing.
+--
+--   Negative values in indexer bounds and index tensors are supported.
+--
+--   Signature: @tensor -> (indexers, subtensor) -> updatedTensor@
+(!=) :: (HasDtype t) => Tensor t -> (Indexers, Tensor t) -> Tensor t
+(!=) xTo@(Tensor shapeTo strideTo offsetTo dat) (indexers, xFrom) =
+  case sizeOfElem dat of {elemSize ->
+  case computeStride elemSize shapeTo of {contiguousStride ->
+  case parseNoneIndexer (V.length shapeTo) indexers of {(dimsToInsert, indexers) ->
+  case insertDims (Tensor shapeTo contiguousStride 0 dat) dimsToInsert
+  of {(Tensor shape stride offset dat) ->
+  case parseEllIndexer (V.length shape) indexers of {indexers ->
+  case parseTensorIndexer shape indexers of {(tensorIndices, indexers) ->
+  case slice (shape, stride, offset) indexers of {(shape, stride, offset) ->
+  case partitionEithers tensorIndices of {(tensorIndices, residualDims) ->
+  case map fst tensorIndices of {tensorDims ->
+  case broadcastN $ map snd tensorIndices of {tensorIndices ->
+  case fromIntegral $ length tensorIndices of {nIndices ->
+  -- If tensor indexers are separated by None, Ell or Slice,
+  -- indexed dims come first in the resulting tensor.
+  case (
+    if not $ null tensorIndices then
+      (fromIntegral $ dim $ head tensorIndices,
+      tensorShape $ head tensorIndices,
+      if findGap tensorDims then
+        0
+      else fromIntegral $ head tensorDims)
+    else (0, V.empty, 0)
+  ) of {(indexNDims, indexShape, startIndexDim) ->
+  case (
+    case tensorDims ++ residualDims of {dims ->
+      (sortDims shape dims, sortDims stride dims)
+    }
+  ) of {(shape, stride) ->
+  case V.concat [
+    V.take (fromIntegral startIndexDim) $ V.drop (fromIntegral nIndices) shape,
+    indexShape,
+    V.drop (fromIntegral $ startIndexDim + nIndices) shape
+  ] of {newShape ->
+  -- unsafePerformIO $ print (tensorDims, residualDims, shape, stride, newShape) >> return (
+  case broadcastTo xFrom newShape of {(Tensor _ strideFrom offsetFrom datFrom) ->
+  case V.unsafeCast dat of {dataCChar ->
+  case V.unsafeCast datFrom of {dataFromCChar ->
+      Tensor shapeTo contiguousStride 0
+      $ unsafePerformIO
+      $ allocaBytes (fromIntegral nIndices * sizeOf (undefined :: Ptr CLLong))
+      $ \ indexStridesPtr ->
+        allocaBytes (fromIntegral nIndices * sizeOf (undefined :: CSize))
+        $ \ indexOffsetsPtr ->
+          allocaBytes (fromIntegral nIndices * sizeOf (undefined :: Ptr CChar))
+          $ \ indexDatPtr -> do
+            zipWithM_ (
+              \ i (Tensor _ stride offset dat) -> do
+                V.unsafeWith stride $ poke $ advancePtr indexStridesPtr i
+                poke (advancePtr indexOffsetsPtr i) offset
+                V.unsafeWith (V.unsafeCast dat) $ poke $ advancePtr indexDatPtr i
+              ) [0 .. fromIntegral nIndices - 1] tensorIndices
+            mutableData <- VM.new $ fromIntegral $ totalElems_ shapeTo
+            case VM.unsafeCast mutableData of {mutableDataCChar -> do
+              [CU.exp| void {
+                copy(
+                  $vec-len:shapeTo,
+                  $vec-ptr:(size_t *shapeTo),
+                  $vec-ptr:(long long *strideTo),
+                  $(size_t offsetTo),
+                  $(size_t elemSize),
+                  $vec-ptr:(char *dataCChar),
+                  $vec-ptr:(char *mutableDataCChar)
+                )
+              } |]
+              [CU.exp| void {
+                tensor_index_assign(
+                  $(int nIndices),
+                  $(int indexNDims),
+                  $vec-ptr:(size_t *indexShape),
+                  $(long long **indexStridesPtr),
+                  $(size_t *indexOffsetsPtr),
+                  $(char **indexDatPtr),
+                  $vec-len:shape,
+                  $vec-ptr:(size_t *shape),
+                  $(size_t elemSize),
+                  $vec-ptr:(long long *strideFrom),
+                  $(size_t offsetFrom),
+                  $vec-ptr:(char *dataFromCChar),
+                  $vec-ptr:(long long *stride),
+                  $(size_t offset),
+                  $vec-ptr:(char *mutableDataCChar)
+                )
+              } |]
+            }
+            V.unsafeFreeze mutableData
+  }}}}}}}}}}}}}}}}}
 
 {-# INLINE parseNoneIndexer #-}
 {-# INLINE parseEllIndexer #-}
 {-# INLINE parseTensorIndexer #-}
-{-# INLINE normalizeIndexer #-}
-{-# INLINE parseIndexers #-}
+{-# INLINE normalizeSliceIndexer #-}
+{-# INLINE parseSliceIndexers #-}
 {-# INLINE slice #-}
+{-# INLINE tensorIndex #-}
 {-# INLINE (!:) #-}
+{-# INLINE (!=) #-}

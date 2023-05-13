@@ -7,7 +7,7 @@ module Data.Layers.Layer where
 import Control.Applicative
 import System.Random
 import Data.Tensor (HasDtype, Tensor, HasArange(arange), tensor, zeros, randn,
-                    (@), (!), Indexer (T), (!:), shape, sumAlongDims, sumAlongDim, relu, astype, transpose)
+                    (@), (!), Indexer (T), (!:), (!=), shape, sumAlongDims, sumAlongDim, relu, astype, transpose)
 import qualified Data.Tensor as T
 
 import Foreign.C.Types
@@ -189,10 +189,8 @@ instance (HasDtype t, Floating t) => Layer (CrossEntropyLogits t) t where
   backward crossEntropy@(CrossEntropyLogits target logits) _ =
     (crossEntropy, -targetMask + softmax)
       where
-        targetMask = tensor (shape logits) setClasses
-        setClasses [i, j]
-          | target ! [i] == fromIntegral j = 1
-          | otherwise                      = 0
+        batch = fromIntegral $ head $ shape logits
+        targetMask = zeros (shape logits) != ([T (arange 0 batch 1), T target], 1)
         softmax = expLogits / sumAlongDims expLogits [-1] True
         expLogits = exp logits
 

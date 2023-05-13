@@ -28,6 +28,7 @@ import Data.Tensor (
       ones,
       scalar,
       single,
+      tensorLike,
       zerosLike,
       onesLike,
       eye,
@@ -39,6 +40,7 @@ import Data.Tensor (
       elementwise,
       (!),
       (!:),
+      (!=),
       item,
       dim,
       shape,
@@ -154,7 +156,7 @@ prop_arange_empty_neg_int :: Bool
 prop_arange_empty_neg_int = (arange 0 1 (-1) :: Tensor CLLong) `equal` T.empty
 
 prop_broadcast_scalar :: Tensor CFloat -> Bool
-prop_broadcast_scalar x = shape (last $ broadcastN [x, scalar 0]) == shape x
+prop_broadcast_scalar x = shape (last $ broadcastN [x, 0]) == shape x
 
 prop_broadcast :: Gen Bool
 prop_broadcast = do
@@ -195,40 +197,40 @@ prop_mod_float = do
   return $ x1 % x2 `allClose` elementwise (\ a b -> a - b * fromIntegral (floor $ a / b)) x1 x2
 
 prop_matmul_id :: Bool
-prop_matmul_id = x @ x == x
+prop_matmul_id = x @ x `equal` x
   where
     x = eye 3 3 0 :: Tensor CFloat
 
 prop_matmul_single :: Bool
-prop_matmul_single = x @ x == 1
+prop_matmul_single = x @ x `equal` 1
   where
     x = single 1 :: Tensor CFloat
 
 prop_matmul_dot :: Bool
-prop_matmul_dot = x @ x == 3
+prop_matmul_dot = x @ x `equal` 3
   where
     x = ones [3] :: Tensor CFloat
 
 prop_matmul_matvec :: Bool
-prop_matmul_matvec = a @ x == 3 * x
+prop_matmul_matvec = a @ x `equal` 3 * x
   where
     a = ones [3, 3] :: Tensor CFloat
     x = ones [3] :: Tensor CFloat
 
 prop_matmul_unit_id :: Bool
-prop_matmul_unit_id = unit_x @ eye last_dim last_dim 0 == unit_x
+prop_matmul_unit_id = unit_x @ eye last_dim last_dim 0 `equal` unit_x
   where
     last_dim = last $ shape unit_x
 
 prop_matmul_unit_matvec :: Bool
-prop_matmul_unit_matvec = unit_x @ ones [last_dim] ==
+prop_matmul_unit_matvec = unit_x @ ones [last_dim] `equal`
   fromList2 [[ 21,  70, 119],
              [168, 217, 266]]
   where
     last_dim = last $ shape unit_x
 
 prop_matmul_unit :: Bool
-prop_matmul_unit = unit_x @ transpose unit_x ==
+prop_matmul_unit = unit_x @ transpose unit_x `equal`
   fromList3 [[[   91,   238,   385],
               [  238,   728,  1218],
               [  385,  1218,  2051]],
@@ -280,7 +282,7 @@ prop_sum_empty :: Index -> Bool
 prop_sum_empty shape = T.sum (ones $ 0 : shape) == (0 :: CFloat)
 
 prop_sum_scalar :: Bool
-prop_sum_scalar = T.sum (scalar 1) == (1 :: CFloat)
+prop_sum_scalar = T.sum 1 == (1 :: CFloat)
 
 prop_sum_single :: Bool
 prop_sum_single = T.sum (single 1) == (1 :: CFloat)
@@ -314,32 +316,32 @@ prop_sum_along_empty shape =
     shapeI = shape ++ [0]
 
 prop_sum_along_single :: Bool
-prop_sum_along_single = sumAlongDim (single 1 :: Tensor CFloat) 0 == 1
+prop_sum_along_single = sumAlongDim (single 1 :: Tensor CFloat) 0 `equal` 1
 
 prop_sum_along_single_neg :: Bool
-prop_sum_along_single_neg = sumAlongDim (single 1 :: Tensor CFloat) (-1) == 1
+prop_sum_along_single_neg = sumAlongDim (single 1 :: Tensor CFloat) (-1) `equal` 1
 
 prop_sum_along_keep_dims :: Tensor CFloat -> Bool
 prop_sum_along_keep_dims x =
-  sumAlongDims xI [0] True ==
+  sumAlongDims xI [0] True `equal`
   tensor (1 : tail (shape xI)) (\ index -> T.sum $ xI !: (A : map I (tail index)))
   where
     xI = insertDim x (-1)
 
 prop_sum_along_keep_dims_neg :: Tensor CFloat -> Bool
 prop_sum_along_keep_dims_neg x =
-  sumAlongDims xI [-1] True ==
+  sumAlongDims xI [-1] True `equal`
   tensor (init (shape xI) ++ [1]) (\ index -> T.sum $ xI !: (map I (init index) ++ [A]))
   where
     xI = insertDim x 0
 
 prop_sum_along_all :: Tensor CFloat -> Bool
 prop_sum_along_all x =
-  sumAlongDims x [0 .. dim x - 1] False == scalar (T.sum x)
+  sumAlongDims x [0 .. dim x - 1] False `equal` scalar (T.sum x)
 
 prop_sum_along_keep_dims_all :: Tensor CFloat -> Bool
 prop_sum_along_keep_dims_all x =
-  sumAlongDims x [0 .. dim x - 1] True == full (replicate (dim x) 1) (T.sum x)
+  sumAlongDims x [0 .. dim x - 1] True `equal` full (replicate (dim x) 1) (T.sum x)
 
 prop_relu :: Tensor CFloat -> Bool
 prop_relu x = relu x `equal` T.map (max 0) x
@@ -423,10 +425,10 @@ prop_insert_dim_neg shape = insertDim x (-1) `equal` zeros (shape ++ [1])
     x = zeros shape :: Tensor CFloat
 
 prop_insert_dim_scalar :: Bool
-prop_insert_dim_scalar = insertDim (scalar 0 :: Tensor CFloat) 0 `equal` single 0
+prop_insert_dim_scalar = insertDim (0 :: Tensor CFloat) 0 `equal` single 0
 
 prop_insert_dim_scalar_neg :: Bool
-prop_insert_dim_scalar_neg = insertDim (scalar 0 :: Tensor CFloat) (-1) `equal` single 0
+prop_insert_dim_scalar_neg = insertDim (0 :: Tensor CFloat) (-1) `equal` single 0
 
 prop_insert_dim_single0 :: Bool
 prop_insert_dim_single0 = insertDim (single 0 :: Tensor CFloat) 0 `equal` zeros [1, 1]
@@ -669,7 +671,7 @@ prop_slice_neg_step = (arange 0 10 1 :: Tensor CFloat) !: [A :. -2] `allClose` a
 
 prop_itensor_index :: Tensor CFloat -> Bool
 prop_itensor_index x
-  | numel x /= 0 = scalar (x ! replicate (dim x) 0) `equal` x !: replicate (dim x) (T $ scalar 0)
+  | numel x /= 0 = scalar (x ! replicate (dim x) 0) `equal` x !: replicate (dim x) (T 0)
   | otherwise    = True
 
 prop_itensor_single :: Tensor CFloat -> Bool
@@ -680,11 +682,33 @@ prop_itensor_single x
 -- prop_itensor_all :: Tensor CFloat -> Bool
 -- prop_itensor_all x = x !: split (indices $ shape x) 0 == x
 
+prop_itensor_assign_index :: Tensor CFloat -> Bool
+prop_itensor_assign_index x
+  | numel x /= 0 && dim x > 0 = x != (replicate (dim x) (T 0), -1) `equal`
+    tensorLike x (
+      \ index ->
+        if index == replicate (dim x) 0 then
+          -1
+        else x ! index
+    )
+  | otherwise    = True
+
+prop_itensor_assign_single :: Tensor CFloat -> Bool
+prop_itensor_assign_single x
+  | numel x /= 0 && dim x > 0 = x != (replicate (dim x) (T $ single 0), -1) `equal`
+    tensorLike x (
+      \ index ->
+        if index == replicate (dim x) 0 then
+          -1
+        else x ! index
+    )
+  | otherwise    = True
+
 unit_x :: Tensor CFloat
 unit_x = arange 0 (2 * 3 * 7) 1 `view` [2, 3, 7]
 
 prop_slice_unit1 :: Bool
-prop_slice_unit1 = unit_x !: [A, None, 0, None, A, None] ==
+prop_slice_unit1 = unit_x !: [A, None, 0, None, A, None] `equal`
   fromList5 [[[[[ 0],
                 [ 1],
                 [ 2],
@@ -695,7 +719,7 @@ prop_slice_unit1 = unit_x !: [A, None, 0, None, A, None] ==
 
 
 
-            [[[[21],
+             [[[[21],
                 [22],
                 [23],
                 [24],
@@ -704,7 +728,7 @@ prop_slice_unit1 = unit_x !: [A, None, 0, None, A, None] ==
                 [27]]]]]
 
 prop_slice_unit2 :: Bool
-prop_slice_unit2 = unit_x !: [None, Ell, None] ==
+prop_slice_unit2 = unit_x !: [None, Ell, None] `equal`
   fromList5 [[[[[ 0],
                 [ 1],
                 [ 2],
@@ -713,7 +737,7 @@ prop_slice_unit2 = unit_x !: [None, Ell, None] ==
                 [ 5],
                 [ 6]],
 
-              [[ 7],
+               [[ 7],
                 [ 8],
                 [ 9],
                 [10],
@@ -721,7 +745,7 @@ prop_slice_unit2 = unit_x !: [None, Ell, None] ==
                 [12],
                 [13]],
 
-              [[14],
+               [[14],
                 [15],
                 [16],
                 [17],
@@ -738,7 +762,7 @@ prop_slice_unit2 = unit_x !: [None, Ell, None] ==
                 [26],
                 [27]],
 
-              [[28],
+               [[28],
                 [29],
                 [30],
                 [31],
@@ -746,7 +770,7 @@ prop_slice_unit2 = unit_x !: [None, Ell, None] ==
                 [33],
                 [34]],
 
-              [[35],
+               [[35],
                 [36],
                 [37],
                 [38],
@@ -755,7 +779,7 @@ prop_slice_unit2 = unit_x !: [None, Ell, None] ==
                 [41]]]]]
 
 prop_slice_unit3 :: Bool
-prop_slice_unit3 = unit_x !: [Ell, None, 2 :. 9] ==
+prop_slice_unit3 = unit_x !: [Ell, None, 2 :. 9] `equal`
   fromList4 [[[[ 2,  3,  4,  5,  6]],
 
               [[ 9, 10, 11, 12, 13]],
@@ -763,14 +787,14 @@ prop_slice_unit3 = unit_x !: [Ell, None, 2 :. 9] ==
               [[16, 17, 18, 19, 20]]],
 
 
-            [[[23, 24, 25, 26, 27]],
+             [[[23, 24, 25, 26, 27]],
 
               [[30, 31, 32, 33, 34]],
 
               [[37, 38, 39, 40, 41]]]]
 
 prop_slice_unit4 :: Bool
-prop_slice_unit4 = unit_x !: [Ell, 5 :. 9, None] ==
+prop_slice_unit4 = unit_x !: [Ell, 5 :. 9, None] `equal`
   fromList4 [[[[ 5],
                [ 6]],
 
@@ -791,15 +815,15 @@ prop_slice_unit4 = unit_x !: [Ell, 5 :. 9, None] ==
                [41]]]]
 
 prop_slice_unit5 :: Bool
-prop_slice_unit5 = unit_x !: [Ell, -7 :. -2 :. -1, None] == zeros [2, 3, 0, 1]
+prop_slice_unit5 = unit_x !: [Ell, -7 :. -2 :. -1, None] `equal` zeros [2, 3, 0, 1]
 
 prop_itensor_unit1 :: Bool
-prop_itensor_unit1 = unit_x !: [A, 0, T $ fromList [1, 2, 3]] ==
+prop_itensor_unit1 = unit_x !: [A, 0, T $ fromList [1, 2, 3]] `equal`
   fromList2 [[ 1,  2,  3],
              [22, 23, 24]]
 
 prop_itensor_unit2 :: Bool
-prop_itensor_unit2 = unit_x !: [None, Ell, T $ fromList [0, -1, 3]] ==
+prop_itensor_unit2 = unit_x !: [None, Ell, T $ fromList [0, -1, 3]] `equal`
   fromList4 [[[[ 0,  6,  3],
                [ 7, 13, 10],
                [14, 20, 17]],
@@ -811,14 +835,14 @@ prop_itensor_unit2 = unit_x !: [None, Ell, T $ fromList [0, -1, 3]] ==
 prop_itensor_unit3 :: Bool
 prop_itensor_unit3 = unit_x !: [None, T $ fromList2 [[0, -1, -1],
                                                      [1,  1,  0]],
-                                      T $ fromList [0, -1, -2], 0] ==
+                                      T $ fromList [0, -1, -2], 0] `equal`
   fromList3 [[[ 0, 35, 28],
               [21, 35,  7]]]
 
 prop_itensor_unit4 :: Bool
 prop_itensor_unit4 = unit_x !: [T $ fromList2 [[0, -1, -1],
                                                [1,  1,  0]],
-                                S 1, T $ fromList [0, -1, -2]] ==
+                                S 1, T $ fromList [0, -1, -2]] `equal`
   fromList3 [[[ 7, 14],
               [34, 41],
               [33, 40]],
@@ -830,9 +854,101 @@ prop_itensor_unit4 = unit_x !: [T $ fromList2 [[0, -1, -1],
 prop_itensor_unit5 :: Bool
 prop_itensor_unit5 = unit_x !: [T $ fromList2 [[0, -1, -1],
                                                [1,  1,  0]],
-                                1, T $ fromList [0, -1, -2]] ==
+                                1, T $ fromList [0, -1, -2]] `equal`
   fromList2 [[ 7, 34, 33],
              [28, 34, 12]]
+
+prop_slice_assign_unit1 :: Bool
+prop_slice_assign_unit1 = unit_x != ([A, None, 0, None, A, None], -1) `equal`
+  fromList3 [[[-1, -1, -1, -1, -1, -1, -1],
+              [ 7,  8,  9, 10, 11, 12, 13],
+              [14, 15, 16, 17, 18, 19, 20]],
+
+             [[-1, -1, -1, -1, -1, -1, -1],
+              [28, 29, 30, 31, 32, 33, 34],
+              [35, 36, 37, 38, 39, 40, 41]]]
+
+prop_slice_assign_unit2 :: Bool
+prop_slice_assign_unit2 = unit_x != ([None, Ell, None], -1) `equal` -onesLike unit_x
+
+prop_slice_assign_unit3 :: Bool
+prop_slice_assign_unit3 = unit_x != ([Ell, None, 2 :. 9], -1) `equal`
+  fromList3 [[[ 0,  1, -1, -1, -1, -1, -1],
+              [ 7,  8, -1, -1, -1, -1, -1],
+              [14, 15, -1, -1, -1, -1, -1]],
+
+             [[21, 22, -1, -1, -1, -1, -1],
+              [28, 29, -1, -1, -1, -1, -1],
+              [35, 36, -1, -1, -1, -1, -1]]]
+
+prop_slice_assign_unit4 :: Bool
+prop_slice_assign_unit4 = unit_x != ([Ell, 5 :. 9, None], -1) `equal`
+  fromList3 [[[ 0,  1,  2,  3,  4, -1, -1],
+              [ 7,  8,  9, 10, 11, -1, -1],
+              [14, 15, 16, 17, 18, -1, -1]],
+
+             [[21, 22, 23, 24, 25, -1, -1],
+              [28, 29, 30, 31, 32, -1, -1],
+              [35, 36, 37, 38, 39, -1, -1]]]
+
+prop_slice_assign_unit5 :: Bool
+prop_slice_assign_unit5 = unit_x != ([Ell, -7 :. -2 :. -1, None], -1) `equal` unit_x
+
+prop_itensor_assign_unit1 :: Bool
+prop_itensor_assign_unit1 = unit_x != ([A, 0, T $ fromList [1, 2, 3]], -1) `equal`
+  fromList3 [[[ 0, -1, -1, -1,  4,  5,  6],
+              [ 7,  8,  9, 10, 11, 12, 13],
+              [14, 15, 16, 17, 18, 19, 20]],
+
+             [[21, -1, -1, -1, 25, 26, 27],
+              [28, 29, 30, 31, 32, 33, 34],
+              [35, 36, 37, 38, 39, 40, 41]]]
+
+prop_itensor_assign_unit2 :: Bool
+prop_itensor_assign_unit2 = unit_x != ([None, Ell, T $ fromList [0, -1, 3]], -1) `equal`
+  fromList3 [[[-1,  1,  2, -1,  4,  5, -1],
+              [-1,  8,  9, -1, 11, 12, -1],
+              [-1, 15, 16, -1, 18, 19, -1]],
+
+             [[-1, 22, 23, -1, 25, 26, -1],
+              [-1, 29, 30, -1, 32, 33, -1],
+              [-1, 36, 37, -1, 39, 40, -1]]]
+
+prop_itensor_assign_unit3 :: Bool
+prop_itensor_assign_unit3 = unit_x != ([None, T $ fromList2 [[0, -1, -1],
+                                                             [1,  1,  0]],
+                                              T $ fromList [0, -1, -2], 0], -1) `equal`
+  fromList3 [[[-1,  1,  2,  3,  4,  5,  6],
+              [-1,  8,  9, 10, 11, 12, 13],
+              [14, 15, 16, 17, 18, 19, 20]],
+
+             [[-1, 22, 23, 24, 25, 26, 27],
+              [-1, 29, 30, 31, 32, 33, 34],
+              [-1, 36, 37, 38, 39, 40, 41]]]
+
+prop_itensor_assign_unit4 :: Bool
+prop_itensor_assign_unit4 = unit_x != ([T $ fromList2 [[0, -1, -1],
+                                                       [1,  1,  0]],
+                                        S 1, T $ fromList [0, -1, -2]], -1) `equal`
+  fromList3 [[[ 0,  1,  2,  3,  4,  5,  6],
+              [-1,  8,  9, 10, 11, -1, 13],
+              [-1, 15, 16, 17, 18, -1, 20]],
+
+             [[21, 22, 23, 24, 25, 26, 27],
+              [-1, 29, 30, 31, 32, -1, -1],
+              [-1, 36, 37, 38, 39, -1, -1]]]
+
+prop_itensor_assign_unit5 :: Bool
+prop_itensor_assign_unit5 = unit_x != ([T $ fromList2 [[0, -1, -1],
+                                                       [1,  1,  0]],
+                                            1, T $ fromList [0, -1, -2]], -1) `equal`
+  fromList3 [[[ 0,  1,  2,  3,  4,  5,  6],
+              [-1,  8,  9, 10, 11, -1, 13],
+              [14, 15, 16, 17, 18, 19, 20]],
+
+             [[21, 22, 23, 24, 25, 26, 27],
+              [-1, 29, 30, 31, 32, -1, -1],
+              [35, 36, 37, 38, 39, 40, 41]]]
 
 return []
 

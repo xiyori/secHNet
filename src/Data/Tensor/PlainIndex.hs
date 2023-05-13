@@ -152,9 +152,9 @@ verifyBroadcastable shapes =
   go $ map V.reverse shapes
     where
       go shapes
-        | any V.null shapes = True
+        | null shapes || any V.null shapes = True
         | otherwise = allEqual (filter (/= 1) $ map V.head shapes) &&
-                      go (map V.tail shapes)
+                                                go (map V.tail shapes)
 
 -- | Broadcast shapes and strides.
 --
@@ -189,6 +189,29 @@ broadcastShapesStrides shapes strides =
         ) shape stride
     ) shapes strides)
   }}
+
+-- | Determine if shape can be broadcasted into other shape.
+--
+--   Signature: @shapeFrom -> shapeTo -> canBroadcast@
+verifyBroadcastableTo :: Shape -> Shape -> Bool
+verifyBroadcastableTo shapeFrom shapeTo =
+  V.and $ V.zipWith (
+    \ dimFrom dimTo ->
+      dimFrom == dimTo || dimFrom == 1
+  ) shapeFrom shapeTo
+
+-- | Broadcast shape and stride into other shape.
+--
+--   Signature: @shapeFrom -> stride -> shapeTo -> stride@
+broadcastShapeStrideTo :: Shape -> Stride -> Shape -> Stride
+broadcastShapeStrideTo shapeFrom stride shapeTo =
+  V.replicate (V.length shapeTo - V.length shapeFrom) 0
+  V.++ V.zipWith (
+    \ dim stride ->
+      if dim == 1 then
+        0
+      else stride
+  ) shapeFrom stride
 
 -- | Parse -1 in new shape in @view@.
 --
@@ -244,6 +267,13 @@ swapElementsAt index (dim1, dim2) =
 --   Signature: @index -> dims -> sortedIndex@
 sortDims :: Storable t => Vector t -> [Int] -> Vector t
 sortDims vec = V.map (vec V.!) . V.fromList
+
+-- | Determine whether a gap (distance between elements > 1)
+--   exists in a list of integers.
+findGap :: (Integral a) => [a] -> Bool
+findGap [] = False
+findGap [_] = False
+findGap (dim1 : dim2 : dims) = dim2 - dim1 > 1 || findGap (dim2 : dims)
 
 {-# INLINE shapeToIndex #-}
 {-# INLINE totalElems #-}

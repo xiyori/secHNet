@@ -252,8 +252,8 @@ randnM shape =
 -- | Generate a tensor from a generator function.
 --
 --   Signature: @tensor -> generator -> tensor@
-tensorLike :: (HasDtype a, HasDtype b) => Tensor a -> (Int -> b) -> Tensor b
-tensorLike (Tensor shape _ _ _) = tensor_ shape
+tensorLike :: (HasDtype a, HasDtype b) => Tensor a -> (Index -> b) -> Tensor b
+tensorLike x = tensor $ shape x
 
 -- | Return a new tensor filled with @fillValue@.
 --
@@ -355,6 +355,23 @@ broadcastN xs =
       ++ unwords (Prelude.map show shapes)
       ++ " can not be broadcasted"
   }
+
+-- | Broadcast tensor into new shape without copying.
+--
+-- Signature: @tensor -> shapeTo -> tensor@
+broadcastTo :: HasDtype t => Tensor t -> Shape -> Tensor t
+broadcastTo (Tensor shapeFrom stride offset dat) shapeTo
+  | verifyBroadcastableTo shapeFrom shapeTo =
+    case broadcastShapeStrideTo shapeFrom stride shapeTo
+    of {stride ->
+      Tensor shapeTo stride offset dat
+    }
+  | otherwise =
+    error
+    $ "can not broadcast tensor of shape "
+    ++ show shapeFrom
+    ++ " into shape "
+    ++ show shapeTo
 
 -- | Elementwise integer division truncated toward negative infinity.
 (//) :: HasDtype t => Tensor t -> Tensor t -> Tensor t
