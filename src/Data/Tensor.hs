@@ -4,7 +4,8 @@ module Data.Tensor (
   module Data.Tensor.Functional,
   module Data.Tensor.Instances,
   module Data.Tensor.Boolean,
-  module Data.Tensor.AdvancedIndex
+  module Data.Tensor.AdvancedIndex,
+  module Data.Tensor.Conv
 ) where
 
 import Data.Tensor.PlainIndex
@@ -13,3 +14,4 @@ import Data.Tensor.Functional
 import Data.Tensor.Instances
 import Data.Tensor.Boolean
 import Data.Tensor.AdvancedIndex
+import Data.Tensor.Conv

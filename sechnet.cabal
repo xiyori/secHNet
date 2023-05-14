@@ -46,6 +46,7 @@ library
         , Data.Tensor.Instances
         , Data.Tensor.Boolean
         , Data.Tensor.AdvancedIndex
+        , Data.Tensor.Conv
         , Data.Tensor
         , Data.Layers.Layer
         , Handle.LayerHandle

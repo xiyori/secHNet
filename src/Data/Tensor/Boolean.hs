@@ -333,6 +333,56 @@ infixr 3 &
 
 infixr 2 |.
 
+any :: Tensor CBool -> Bool
+any x@(Tensor shape stride offset dat) =
+  case V.unsafeCast dat of {dataCChar ->
+  case tensorDtype x of {dtype ->
+    unsafePerformIO
+    $ alloca (
+      \ outCCharPtr -> do
+        [CU.exp| void {
+          tensor_any(
+            $vec-len:shape,
+            $vec-ptr:(size_t *shape),
+            $vec-ptr:(long long *stride),
+            $(size_t offset),
+            $(int dtype),
+            $vec-ptr:(char *dataCChar),
+            $(char *outCCharPtr)
+          )
+        } |]
+        case castPtr outCCharPtr of {outPtr -> do
+          result <- peek outPtr :: IO CBool
+          return $ toBool result
+        }
+    )
+  }}
+
+all :: Tensor CBool -> Bool
+all x@(Tensor shape stride offset dat) =
+  case V.unsafeCast dat of {dataCChar ->
+  case tensorDtype x of {dtype ->
+    unsafePerformIO
+    $ alloca (
+      \ outCCharPtr -> do
+        [CU.exp| void {
+          tensor_all(
+            $vec-len:shape,
+            $vec-ptr:(size_t *shape),
+            $vec-ptr:(long long *stride),
+            $(size_t offset),
+            $(int dtype),
+            $vec-ptr:(char *dataCChar),
+            $(char *outCCharPtr)
+          )
+        } |]
+        case castPtr outCCharPtr of {outPtr -> do
+          result <- peek outPtr :: IO CBool
+          return $ toBool result
+        }
+    )
+  }}
+
 {-# INLINE equal #-}
 {-# INLINE allCloseTol #-}
 {-# INLINE (==) #-}
@@ -342,3 +392,5 @@ infixr 2 |.
 {-# INLINE (>=) #-}
 {-# INLINE (<=) #-}
 {-# INLINE not #-}
+{-# INLINE any #-}
+{-# INLINE all #-}

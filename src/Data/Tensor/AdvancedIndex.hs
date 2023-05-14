@@ -282,6 +282,7 @@ parseSliceIndexers shape indexers =
   }
 
 -- | Perform slicing.
+slice :: (Shape, Stride, CSize) -> Indexers -> (Shape, Stride, CSize)
 slice (shape, stride, offset) indexers =
   case parseSliceIndexers shape indexers of {indexers ->
     (V.fromList $ map (

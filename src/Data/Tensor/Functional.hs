@@ -37,6 +37,15 @@ C.include "cbits/matmul.h"
 -- Construction
 -- ------------
 
+-- | Convert a vector to a 1-D tensor.
+--
+--   Signature: @vector -> tensor@
+fromVector :: HasDtype t => Vector t -> Tensor t
+fromVector dat =
+  case V.singleton $ fromIntegral $ V.length dat of {shape ->
+    Tensor shape (computeStride (sizeOfElem dat) shape) 0 dat
+  }
+
 -- | Convert a list to a 1-D tensor.
 --
 --   Signature: @list -> tensor@
@@ -445,6 +454,11 @@ infixl 7 //
 
 infixl 7 %
 
+-- | Make a tensor contiguous in last dim.
+--
+--   Helper function for @matmul@.
+--
+--   Signature: @tensor -> (performCblasTranspose, tensor)@
 makeContiguousInLastDim :: HasDtype t => Tensor t -> (CInt, Tensor t)
 makeContiguousInLastDim x@(Tensor shape stride offset dat) =
   case fromIntegral $ sizeOfElem dat of {elemSize ->
@@ -471,6 +485,9 @@ makeContiguousInLastDim x@(Tensor shape stride offset dat) =
       }
   }}
 
+-- | Perform batch matrix multiplication.
+--
+--   Broadcasting rules follow NumPy matmul.
 matmul :: (HasDtype t, Floating t) => Tensor t -> Tensor t -> Tensor t
 matmul (Tensor shape1 stride1 offset1 dat1)
        (Tensor shape2 stride2 offset2 dat2) =
@@ -892,6 +909,10 @@ copy x@(Tensor shape stride offset dat) =
         $ V.slice (fromIntegral offset)
           (fromIntegral $ totalElems_ shape * elemSize) dataCChar
   }}}
+
+-- | Convert a tensor to a vector.
+toVector :: (HasDtype t) => Tensor t -> Vector t
+toVector = tensorData . copy
 
 -- | Cast a tensor to a different dtype.
 astype :: forall a b. (HasDtype a, HasDtype b) => Tensor a -> Tensor b

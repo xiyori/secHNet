@@ -16,6 +16,7 @@ import Data.Tensor (
       HasArange(arange),
       Indexer(I, A, S, E, (:.), T, Ell, None),
       Index,
+      fromVector,
       fromList,
       fromList2,
       fromList3,
@@ -26,6 +27,7 @@ import Data.Tensor (
       full,
       zeros,
       ones,
+      empty,
       scalar,
       single,
       tensorLike,
@@ -37,6 +39,7 @@ import Data.Tensor (
       (//),
       (%),
       (@),
+      conv,
       elementwise,
       (!),
       (!:),
@@ -51,6 +54,7 @@ import Data.Tensor (
       relu,
       copy,
       astype,
+      toVector,
       transpose,
       flatten,
       view,
@@ -68,6 +72,12 @@ import System.IO.Unsafe
 
 prop_fromList3 :: Bool
 prop_fromList3 = (fromList3 [[[], []], [[], []], [[], []]] :: Tensor CFloat) `equal` zeros [3, 2, 0]
+
+prop_fromVector :: Bool
+prop_fromVector = (fromVector $ V.replicate 3 0 :: Tensor CFloat) `equal` zeros [3]
+
+prop_fromVector_empty :: Bool
+prop_fromVector_empty = (fromVector V.empty :: Tensor CFloat) `equal` empty
 
 prop_tensor0 :: Index -> Bool
 prop_tensor0 shape = tensor shape (const (0 :: CFloat)) `equal` zeros shape
@@ -380,6 +390,12 @@ prop_astype_double x = (astype xD :: Tensor CFloat) `equal` x
   where
     xD = astype x :: Tensor CDouble
 
+prop_toVector :: Index -> Bool
+prop_toVector shape = V.length (toVector (zeros shape :: Tensor CFloat)) == totalElems shape
+
+prop_toVector_id :: Tensor CFloat -> Bool
+prop_toVector_id x = fromVector (toVector x) `view` shape x `equal` x
+
 prop_transpose_id :: Tensor CFloat -> Bool
 prop_transpose_id x = transpose (transpose x1) `equal` x1
   where
@@ -509,6 +525,12 @@ prop_or shape = (ones shape |. ones shape) `equal` (ones shape :: Tensor CBool) 
                 (zeros shape |. ones shape) `equal` (ones shape :: Tensor CBool) &&
                 (zeros shape |. zeros shape) `equal` (zeros shape :: Tensor CBool)
 
+prop_any :: Tensor CFloat -> Bool
+prop_any x = T.any (x T.== 0) == V.any (== 0) (toVector x)
+
+prop_all :: Tensor CFloat -> Bool
+prop_all x = T.all (x T.> 0) == V.all (> 0) (toVector x)
+
 
 -- NumTensor
 -- ---------
@@ -538,6 +560,30 @@ prop_num_associative :: Index -> Gen Bool
 prop_num_associative shape = do
   (x1, x2) <- arbitraryPairWithShape shape :: Gen (Tensor CDouble, Tensor CDouble)
   return $ ((x1 + x2) * x2) `allClose` (x1 * x2 + x2 * x2)
+
+
+-- Conv
+-- ----
+
+prop_conv1d :: Tensor CDouble -> Bool
+prop_conv1d x
+  | dim x > 0 && numel x > 0 = conv x (ones [last $ shape x]) [1] `allClose` sumAlongDims x [-1] True
+  | otherwise = True
+
+prop_conv2d :: Tensor CDouble -> Bool
+prop_conv2d x
+  | dim x > 1 && numel x > 0 = conv x (ones $ drop (dim x - 2) $ shape x) [1] `allClose` sumAlongDims x [-1, -2] True
+  | otherwise = True
+
+prop_conv_unit :: Bool
+prop_conv_unit =
+  let x = fromList2 [[3, 9, 0],
+                     [2, 8, 1],
+                     [1, 4, 8]] :: Tensor CFloat
+      k = fromList2 [[8, 9],
+                     [4, 4]] in
+  conv x k [1] `allClose` fromList2 [[145, 108],
+                                     [108, 121]]
 
 
 -- Instances

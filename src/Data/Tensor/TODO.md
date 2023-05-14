@@ -9,9 +9,9 @@
 - [x] advancedIndex
 - [x] sumAlongDim
 - [x] matmul
-- [ ] conv
+- [x] conv
 - [ ] minimum, maximum
 - [ ] concat, stack, split, indices
 - [x] assignments
 - [ ] accumulate
-- [ ] isin
+- [x] isin

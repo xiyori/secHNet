@@ -9,6 +9,20 @@
 
 #define SCALAR_NOT(arg) !arg
 
+#define ANY_INIT(dtype) \
+    dtype##_t accum = 0;
+#define ANY_STEP(dtype, next_value) \
+    if (next_value) { \
+        return 1;\
+    }
+
+#define ALL_INIT(dtype) \
+    dtype##_t accum = 1;
+#define ALL_STEP(dtype, next_value) \
+    if (!next_value) { \
+        return 0;\
+    }
+
 
 FUNC_MATH(ALLCLOSE, fabs)
 
@@ -21,3 +35,9 @@ FUNC_GENERIC(ELEMENTWISE, leq, cbool, SCALAR_LEQ)
 
 MAP(cbool, not, SCALAR_NOT)
 FUNC_WRAPPER(FOR_BOOL, MAP, not)
+
+FOLD(cbool, any, ANY)
+FUNC_WRAPPER(FOR_BOOL, FOLD, any)
+
+FOLD(cbool, all, ALL)
+FUNC_WRAPPER(FOR_BOOL, FOLD, all)
